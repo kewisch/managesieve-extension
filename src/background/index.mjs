@@ -11,12 +11,26 @@ const providers = {
   tcp: new TcpManageSieveProvider(),
 };
 const SAVE_REQUEST_TIMEOUT_MS = 30000;
+const MANAGE_SIEVE_MENU_ID = "manageSieveToolsMenu";
 
-messengerApi.action.onClicked.addListener(() => {
+messengerApi.menus.create({
+  id: MANAGE_SIEVE_MENU_ID,
+  title: messengerApi.i18n.getMessage("extensionName"),
+  contexts: ["tools_menu"],
+  type: "normal",
+});
+
+messengerApi.menus.onClicked.addListener(info => {
+  if (info.menuItemId == MANAGE_SIEVE_MENU_ID) {
+    openManageSieve();
+  }
+});
+
+function openManageSieve() {
   messengerApi.tabs.create({
     url: messengerApi.runtime.getURL("content/manage.html"),
   });
-});
+}
 
 messengerApi.runtime.onMessage.addListener(message => {
   if (!message?.type?.startsWith("managesieve.")) {

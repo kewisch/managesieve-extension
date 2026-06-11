@@ -20,6 +20,7 @@
   },
   "permissions": [
     "accountsRead",
+    "menus",
     "storage",
     "webNavigation",
     "webRequest"
@@ -51,10 +52,6 @@
     "page": "content/manage.html",
     "open_in_tab": true,
     "browser_style": true
-  },
-  "action": {
-    "default_icon": "images/addon.svg",
-    "default_title": "__MSG_extensionName__"
   },
   "background": {
     "scripts": [

@@ -4,24 +4,22 @@ import { OAuthWindowFlow, refreshAccessToken } from "./oauth-client.mjs";
 import { ProviderError } from "./provider-error.mjs";
 import { TcpManageSieveProvider } from "./tcp-provider.mjs";
 
-const messengerApi = globalThis.messenger || globalThis.browser;
-const storage = new AccountStorage(messengerApi.storage.local);
+const storage = new AccountStorage(messenger.storage.local);
 const providers = {
   jmap: new JmapSieveProvider(),
   tcp: new TcpManageSieveProvider(),
 };
 const SAVE_REQUEST_TIMEOUT_MS = 30000;
-const MANAGE_SIEVE_MENU_ID = "manageSieveToolsMenu";
 
-messengerApi.runtime.onStartup.addListener(() => createManageSieveMenu());
+messenger.runtime.onStartup.addListener(() => createManageSieveMenu());
 
-messengerApi.menus.onClicked.addListener(info => {
-  if (info.menuItemId == MANAGE_SIEVE_MENU_ID) {
+messenger.menus.onClicked.addListener(info => {
+  if (info.menuItemId == "manageSieveToolsMenu") {
     openManagePage();
   }
 });
 
-messengerApi.runtime.onInstalled.addListener(details => {
+messenger.runtime.onInstalled.addListener(details => {
   if (details.reason == "install") {
     createManageSieveMenu();
     openManagePage({ showWelcome: true });
@@ -29,21 +27,21 @@ messengerApi.runtime.onInstalled.addListener(details => {
 });
 
 function createManageSieveMenu() {
-  messengerApi.menus.create({
-    id: MANAGE_SIEVE_MENU_ID,
-    title: messengerApi.i18n.getMessage("extensionName"),
+  messenger.menus.create({
+    id: "manageSieveToolsMenu",
+    title: messenger.i18n.getMessage("extensionName"),
     contexts: ["tools_menu"],
     type: "normal",
   });
 }
 
 function openManagePage({ showWelcome = false } = {}) {
-  messengerApi.tabs.create({
-    url: messengerApi.runtime.getURL(`content/manage.html${showWelcome ? "?welcome" : ""}`),
+  messenger.tabs.create({
+    url: messenger.runtime.getURL(`content/manage.html${showWelcome ? "?welcome" : ""}`),
   });
 }
 
-messengerApi.runtime.onMessage.addListener(message => {
+messenger.runtime.onMessage.addListener(message => {
   if (!message?.type?.startsWith("managesieve.")) {
     return false;
   }
@@ -114,7 +112,7 @@ async function saveConfig(accountId, config) {
 }
 
 async function createManualConnection(config) {
-  const provider = getProviderForConfig(config);
+  const provider = config.provider == "tcp" ? providers.tcp : providers.jmap;
   let connection = null;
   try {
     connection = await provider.discover(config);
@@ -158,19 +156,19 @@ async function removeManualConnection(accountId) {
 }
 
 async function authorizeOAuth(config) {
-  const flow = new OAuthWindowFlow({ browserApi: messengerApi });
+  const flow = new OAuthWindowFlow();
   return {
     ok: true,
     config: await flow.authorize(config, {
-      titlePreface: `${messengerApi.i18n.getMessage("extensionShortName")} - `,
+      titlePreface: `${messenger.i18n.getMessage("extensionShortName")} - `,
       endpointMessages: {
-        missingConfigurationMessage: messengerApi.i18n.getMessage("oauthMissingEndpointConfiguration"),
-        partialManualEndpointsMessage: messengerApi.i18n.getMessage("oauthIncompleteManualEndpoints"),
+        missingConfigurationMessage: messenger.i18n.getMessage("oauthMissingEndpointConfiguration"),
+        partialManualEndpointsMessage: messenger.i18n.getMessage("oauthIncompleteManualEndpoints"),
       },
       messages: {
-        canceled: messengerApi.i18n.getMessage("oauthCanceled"),
-        stateMismatch: messengerApi.i18n.getMessage("oauthStateMismatch"),
-        missingCode: messengerApi.i18n.getMessage("oauthMissingCode"),
+        canceled: messenger.i18n.getMessage("oauthCanceled"),
+        stateMismatch: messenger.i18n.getMessage("oauthStateMismatch"),
+        missingCode: messenger.i18n.getMessage("oauthMissingCode"),
       },
     }),
   };
@@ -367,10 +365,13 @@ async function getConnection(accountId, { signal = null } = {}) {
 }
 
 async function getProviderConnection(account, config) {
-  const provider = getProviderForConfig(config);
+  const provider = config.provider == "tcp" ? providers.tcp : providers.jmap;
   const connection = config.provider == "tcp" ?
     await provider.discover(config) :
-    await discover(account, config);
+    await providers.jmap.discover({
+      ...config,
+      thunderbirdAccount: account,
+    });
   return { provider, connection };
 }
 
@@ -396,21 +397,6 @@ async function refreshOAuthConfig(accountId, config, { signal = null } = {}) {
     oauthExpiresAt: token.expiresAt,
     oauthScope: token.scope || config.oauthScope,
   });
-}
-
-async function discover(account, config) {
-  return providers.jmap.discover({
-    ...config,
-    thunderbirdAccount: account,
-  });
-}
-
-function getProviderForConfig(config) {
-  if (config.provider == "tcp") {
-    return providers.tcp;
-  }
-
-  return providers.jmap;
 }
 
 function shouldRetryStaleBlobLoad(provider, error) {
@@ -449,7 +435,7 @@ async function runTimedSaveOperation(operation) {
       abortController.abort();
       reject(new ProviderError(
         "saveTimeout",
-        messengerApi.i18n.getMessage("scriptSaveTimeout") || "Saving timed out. The server did not respond."
+        messenger.i18n.getMessage("scriptSaveTimeout") || "Saving timed out. The server did not respond."
       ));
     }, SAVE_REQUEST_TIMEOUT_MS);
   });
@@ -474,7 +460,7 @@ async function getThunderbirdAccount(accountId) {
 
 async function getKnownAccounts() {
   const [thunderbirdAccounts, manualAccounts] = await Promise.all([
-    messengerApi.accounts.list(false),
+    messenger.accounts.list(false),
     storage.getManualAccounts(),
   ]);
 

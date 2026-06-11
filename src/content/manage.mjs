@@ -30,7 +30,6 @@ import {
   normalizeClientId,
 } from "../background/oauth-client.mjs";
 
-const messengerApi = globalThis.messenger || globalThis.browser;
 const state = {
   accounts: [],
   configs: {},
@@ -1012,7 +1011,7 @@ async function requestHostPermission(accountId) {
     return true;
   }
 
-  return messengerApi.permissions.request({ origins: [...origins] });
+  return messenger.permissions.request({ origins: [...origins] });
 }
 
 async function authorizeOAuth(config) {
@@ -1281,9 +1280,9 @@ function localizeDocument() {
 }
 
 function message(name, substitutions = undefined) {
-  return messengerApi.i18n.getMessage(name, substitutions) || name;
+  return messenger.i18n.getMessage(name, substitutions) || name;
 }
 
 async function sendMessage(messageData) {
-  return messengerApi.runtime.sendMessage(messageData);
+  return messenger.runtime.sendMessage(messageData);
 }

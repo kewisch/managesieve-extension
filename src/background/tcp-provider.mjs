@@ -353,7 +353,7 @@ export class TcpManageSieveProvider {
 }
 
 function defaultTcpApi() {
-  return (globalThis.messenger || globalThis.browser).tcp;
+  return messenger.tcp;
 }
 
 function parseManageSieveResponse(line) {

@@ -1,6 +1,3 @@
-const CONFIG_KEY = "accountConfigs";
-const MANUAL_ACCOUNTS_KEY = "manualAccounts";
-
 export class AccountStorage {
   constructor(storageArea, { idGenerator = () => crypto.randomUUID() } = {}) {
     this.storageArea = storageArea;
@@ -8,8 +5,8 @@ export class AccountStorage {
   }
 
   async getAllConfigs() {
-    const stored = await this.storageArea.get({ [CONFIG_KEY]: {} });
-    return stored[CONFIG_KEY] || {};
+    const stored = await this.storageArea.get({ accountConfigs: {} });
+    return stored.accountConfigs || {};
   }
 
   async getConfig(accountId) {
@@ -39,14 +36,14 @@ export class AccountStorage {
       tcpSecurity: "starttls",
       ...config,
     };
-    await this.storageArea.set({ [CONFIG_KEY]: configs });
+    await this.storageArea.set({ accountConfigs: configs });
     await this.#updateManualAccountName(accountId, configs[accountId].displayName);
     return configs[accountId];
   }
 
   async getManualAccounts() {
-    const stored = await this.storageArea.get({ [MANUAL_ACCOUNTS_KEY]: [] });
-    return stored[MANUAL_ACCOUNTS_KEY] || [];
+    const stored = await this.storageArea.get({ manualAccounts: [] });
+    return stored.manualAccounts || [];
   }
 
   async createManualAccount(config) {
@@ -58,7 +55,7 @@ export class AccountStorage {
       identities: [],
     };
     const manualAccounts = await this.getManualAccounts();
-    await this.storageArea.set({ [MANUAL_ACCOUNTS_KEY]: [...manualAccounts, account] });
+    await this.storageArea.set({ manualAccounts: [...manualAccounts, account] });
     await this.setConfig(id, config);
     return account;
   }
@@ -78,8 +75,8 @@ export class AccountStorage {
     const configs = await this.getAllConfigs();
     delete configs[accountId];
     await this.storageArea.set({
-      [MANUAL_ACCOUNTS_KEY]: updatedAccounts,
-      [CONFIG_KEY]: configs,
+      manualAccounts: updatedAccounts,
+      accountConfigs: configs,
     });
     return true;
   }
@@ -101,6 +98,6 @@ export class AccountStorage {
       };
     });
 
-    await this.storageArea.set({ [MANUAL_ACCOUNTS_KEY]: updatedAccounts });
+    await this.storageArea.set({ manualAccounts: updatedAccounts });
   }
 }

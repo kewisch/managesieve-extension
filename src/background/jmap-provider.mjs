@@ -7,10 +7,6 @@ const BLOB_CAPABILITY = "urn:ietf:params:jmap:blob";
 const SIEVE_MIME_TYPE = "application/sieve";
 
 export class JmapSieveProvider {
-  constructor({ fetchImpl = defaultFetch } = {}) {
-    this.fetchImpl = fetchImpl;
-  }
-
   async discover(config) {
     const sessionUrl = normalizeJmapSessionUrl(config.sessionUrl) || this.#getWellKnownUrl(config.thunderbirdAccount);
     if (!sessionUrl) {
@@ -334,7 +330,7 @@ export class JmapSieveProvider {
   }
 
   async #fetch(url, options = {}) {
-    return this.fetchImpl(url, {
+    return fetch(url, {
       ...options,
       cache: "no-store",
     });
@@ -405,8 +401,4 @@ export class JmapSieveProvider {
   #absoluteUrl(url, base) {
     return new URL(url, base).toString();
   }
-}
-
-function defaultFetch(url, options) {
-  return globalThis.fetch(url, options);
 }

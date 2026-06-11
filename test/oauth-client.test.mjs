@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import test, { afterEach } from "node:test";
 
 import {
   OAUTH_CALLBACK_URL,
@@ -18,6 +18,22 @@ function jsonResponse(body) {
     status: 200,
     headers: { "Content-Type": "application/json" },
   });
+}
+
+const originalFetch = globalThis.fetch;
+const originalMessenger = globalThis.messenger;
+
+afterEach(() => {
+  globalThis.fetch = originalFetch;
+  globalThis.messenger = originalMessenger;
+});
+
+function useFetch(handler) {
+  globalThis.fetch = handler;
+}
+
+function useMessenger(messengerMock) {
+  globalThis.messenger = messengerMock;
 }
 
 async function waitFor(predicate) {
@@ -54,18 +70,19 @@ test("builds an OAuth authorization URL using the open client id and PKCE", () =
 
 test("exchanges an authorization code using the open client id", async () => {
   let requestBody = "";
+  useFetch(async (url, options) => {
+    assert.equal(url, "https://auth.example.net/oauth/token");
+    requestBody = options.body;
+    return jsonResponse({
+      access_token: "access-token",
+      refresh_token: "refresh-token",
+      token_type: "bearer",
+      expires_in: 3600,
+      scope: "urn:ietf:params:jmap:core",
+    });
+  });
+
   const token = await exchangeAuthorizationCode({
-    fetchImpl: async (url, options) => {
-      assert.equal(url, "https://auth.example.net/oauth/token");
-      requestBody = options.body;
-      return jsonResponse({
-        access_token: "access-token",
-        refresh_token: "refresh-token",
-        token_type: "bearer",
-        expires_in: 3600,
-        scope: "urn:ietf:params:jmap:core",
-      });
-    },
     tokenUrl: "https://auth.example.net/oauth/token",
     code: "authorization-code",
     redirectUrl: "https://extension.example/redirect",
@@ -85,14 +102,15 @@ test("exchanges an authorization code using the open client id", async () => {
 
 test("exchanges an authorization code using a custom client id", async () => {
   let requestBody = "";
+  useFetch(async (url, options) => {
+    requestBody = options.body;
+    return jsonResponse({
+      access_token: "access-token",
+      refresh_token: "refresh-token",
+    });
+  });
+
   await exchangeAuthorizationCode({
-    fetchImpl: async (url, options) => {
-      requestBody = options.body;
-      return jsonResponse({
-        access_token: "access-token",
-        refresh_token: "refresh-token",
-      });
-    },
     tokenUrl: "https://auth.example.net/oauth/token",
     code: "authorization-code",
     redirectUrl: "https://extension.example/redirect",
@@ -103,46 +121,41 @@ test("exchanges an authorization code using a custom client id", async () => {
   assert.equal(new URLSearchParams(requestBody).get("client_id"), "custom-client");
 });
 
-test("exchanges an authorization code with default fetch bound to the global object", async () => {
-  const originalFetch = globalThis.fetch;
+test("exchanges an authorization code with global fetch", async () => {
   let requestBody = "";
-  try {
-    globalThis.fetch = function(url, options) {
-      assert.equal(this, globalThis);
-      assert.equal(url, "https://auth.example.net/oauth/token");
-      requestBody = options.body;
-      return jsonResponse({
-        access_token: "access-token",
-        refresh_token: "refresh-token",
-      });
-    };
-
-    await exchangeAuthorizationCode({
-      tokenUrl: "https://auth.example.net/oauth/token",
-      code: "authorization-code",
-      redirectUrl: "http://localhost/",
-      codeVerifier: "verifier-value",
+  useFetch(async (url, options) => {
+    assert.equal(url, "https://auth.example.net/oauth/token");
+    requestBody = options.body;
+    return jsonResponse({
+      access_token: "access-token",
+      refresh_token: "refresh-token",
     });
-  } finally {
-    globalThis.fetch = originalFetch;
-  }
+  });
+
+  await exchangeAuthorizationCode({
+    tokenUrl: "https://auth.example.net/oauth/token",
+    code: "authorization-code",
+    redirectUrl: "http://localhost/",
+    codeVerifier: "verifier-value",
+  });
 
   assert.equal(new URLSearchParams(requestBody).get("code"), "authorization-code");
 });
 
 test("refreshes an access token using the open client id", async () => {
   let requestBody = "";
+  useFetch(async (url, options) => {
+    assert.equal(url, "https://auth.example.net/oauth/token");
+    requestBody = options.body;
+    return jsonResponse({
+      access_token: "new-access-token",
+      refresh_token: "new-refresh-token",
+      token_type: "bearer",
+      expires_in: 7200,
+    });
+  });
+
   const token = await refreshAccessToken({
-    fetchImpl: async (url, options) => {
-      assert.equal(url, "https://auth.example.net/oauth/token");
-      requestBody = options.body;
-      return jsonResponse({
-        access_token: "new-access-token",
-        refresh_token: "new-refresh-token",
-        token_type: "bearer",
-        expires_in: 7200,
-      });
-    },
     tokenUrl: "https://auth.example.net/oauth/token",
     refreshToken: "old-refresh-token",
   });
@@ -158,14 +171,15 @@ test("refreshes an access token using the open client id", async () => {
 
 test("refreshes an access token using a custom client id", async () => {
   let requestBody = "";
+  useFetch(async (url, options) => {
+    requestBody = options.body;
+    return jsonResponse({
+      access_token: "new-access-token",
+      refresh_token: "new-refresh-token",
+    });
+  });
+
   await refreshAccessToken({
-    fetchImpl: async (url, options) => {
-      requestBody = options.body;
-      return jsonResponse({
-        access_token: "new-access-token",
-        refresh_token: "new-refresh-token",
-      });
-    },
     tokenUrl: "https://auth.example.net/oauth/token",
     refreshToken: "old-refresh-token",
     clientId: "custom-client",
@@ -175,16 +189,17 @@ test("refreshes an access token using a custom client id", async () => {
 });
 
 test("discovers OAuth URLs from authorization server metadata", async () => {
+  useFetch(async url => {
+    assert.equal(url, "https://auth.example.net/.well-known/oauth-authorization-server");
+    return jsonResponse({
+      issuer: "https://auth.example.net",
+      authorization_endpoint: "https://auth.example.net/oauth/authorize",
+      token_endpoint: "https://auth.example.net/oauth/token",
+      registration_endpoint: "https://auth.example.net/oauth/register",
+    });
+  });
+
   const endpoints = await discoverOAuthEndpoints({
-    fetchImpl: async url => {
-      assert.equal(url, "https://auth.example.net/.well-known/oauth-authorization-server");
-      return jsonResponse({
-        issuer: "https://auth.example.net",
-        authorization_endpoint: "https://auth.example.net/oauth/authorize",
-        token_endpoint: "https://auth.example.net/oauth/token",
-        registration_endpoint: "https://auth.example.net/oauth/register",
-      });
-    },
     issuerUrl: "https://auth.example.net",
   });
 
@@ -251,7 +266,7 @@ test("OAuth window flow captures localhost redirect and exchanges the code", asy
   let removedWindowId = null;
   let tokenRequestBody = "";
 
-  const browserApi = {
+  const messengerMock = {
     i18n: {
       getUILanguage: () => "en-US",
     },
@@ -288,19 +303,18 @@ test("OAuth window flow captures localhost redirect and exchanges the code", asy
     },
   };
 
-  const flow = new OAuthWindowFlow({
-    browserApi,
-    fetchImpl: async (url, options) => {
-      assert.equal(url, "https://auth.example.net/oauth/token");
-      tokenRequestBody = options.body;
-      return jsonResponse({
-        access_token: "access-token",
-        refresh_token: "refresh-token",
-        expires_in: 3600,
-        scope: "urn:ietf:params:jmap:sieve",
-      });
-    },
+  useFetch(async (url, options) => {
+    assert.equal(url, "https://auth.example.net/oauth/token");
+    tokenRequestBody = options.body;
+    return jsonResponse({
+      access_token: "access-token",
+      refresh_token: "refresh-token",
+      expires_in: 3600,
+      scope: "urn:ietf:params:jmap:sieve",
+    });
   });
+  useMessenger(messengerMock);
+  const flow = new OAuthWindowFlow();
 
   const authorization = flow.authorize({
     sessionUrl: "https://jmap.example.net/session",
@@ -344,14 +358,14 @@ test("OAuth window flow captures HTTPS localhost redirects", async () => {
   };
   let tokenRequestBody = "";
 
-  const browserApi = {
+  const messengerMock = {
     i18n: {
       getUILanguage: () => "en-US",
     },
     windows: {
       lastCreatedUrl: "",
       create: async createData => {
-        browserApi.windows.lastCreatedUrl = createData.url;
+        messengerMock.windows.lastCreatedUrl = createData.url;
         return { id: 42 };
       },
       remove: async () => {},
@@ -380,16 +394,15 @@ test("OAuth window flow captures HTTPS localhost redirects", async () => {
     },
   };
 
-  const flow = new OAuthWindowFlow({
-    browserApi,
-    fetchImpl: async (url, options) => {
-      tokenRequestBody = options.body;
-      return jsonResponse({
-        access_token: "access-token",
-        refresh_token: "refresh-token",
-      });
-    },
+  useFetch(async (url, options) => {
+    tokenRequestBody = options.body;
+    return jsonResponse({
+      access_token: "access-token",
+      refresh_token: "refresh-token",
+    });
   });
+  useMessenger(messengerMock);
+  const flow = new OAuthWindowFlow();
   const authorization = flow.authorize({
     oauthAuthorizationUrl: "https://auth.example.net/oauth/authorize",
     oauthTokenUrl: "https://auth.example.net/oauth/token",
@@ -400,7 +413,7 @@ test("OAuth window flow captures HTTPS localhost redirects", async () => {
   await waitFor(() => listeners.beforeRequest);
   assert.deepEqual(listeners.beforeRequest.filter.urls, OAUTH_CALLBACK_URL_PATTERNS);
   listeners.beforeRequest.listener({
-    url: `https://localhost/?code=https-code&state=${new URL(browserApi.windows.lastCreatedUrl).searchParams.get("state")}`,
+    url: `https://localhost/?code=https-code&state=${new URL(messengerMock.windows.lastCreatedUrl).searchParams.get("state")}`,
   });
 
   const config = await authorization;
@@ -431,7 +444,7 @@ test("OAuth window flow captures localhost callback through webNavigation", asyn
       }
     },
   });
-  const browserApi = {
+  const messengerMock = {
     i18n: {
       getUILanguage: () => "en-US",
     },
@@ -472,16 +485,15 @@ test("OAuth window flow captures localhost callback through webNavigation", asyn
     },
   };
 
-  const flow = new OAuthWindowFlow({
-    browserApi,
-    fetchImpl: async (url, options) => {
-      tokenRequestBody = options.body;
-      return jsonResponse({
-        access_token: "access-token",
-        refresh_token: "refresh-token",
-      });
-    },
+  useFetch(async (url, options) => {
+    tokenRequestBody = options.body;
+    return jsonResponse({
+      access_token: "access-token",
+      refresh_token: "refresh-token",
+    });
   });
+  useMessenger(messengerMock);
+  const flow = new OAuthWindowFlow();
   const authorization = flow.authorize({
     oauthAuthorizationUrl: "https://auth.example.net/oauth/authorize",
     oauthTokenUrl: "https://auth.example.net/oauth/token",
@@ -513,7 +525,7 @@ test("OAuth window flow ignores localhost navigation without the expected state"
     beforeNavigate: null,
     windowRemoved: null,
   };
-  const browserApi = {
+  const messengerMock = {
     i18n: {
       getUILanguage: () => "en-US",
     },
@@ -551,7 +563,8 @@ test("OAuth window flow ignores localhost navigation without the expected state"
     },
   };
 
-  const flow = new OAuthWindowFlow({ browserApi });
+  useMessenger(messengerMock);
+  const flow = new OAuthWindowFlow();
   const authorization = flow.authorize({
     oauthAuthorizationUrl: "https://auth.example.net/oauth/authorize",
     oauthTokenUrl: "https://auth.example.net/oauth/token",
@@ -574,7 +587,7 @@ test("OAuth window flow registers the redirect listener before opening the login
   let beforeRequest = null;
   let removedWindowId = null;
 
-  const browserApi = {
+  const messengerMock = {
     i18n: {
       getUILanguage: () => "en-US",
     },
@@ -614,16 +627,15 @@ test("OAuth window flow registers the redirect listener before opening the login
     },
   };
 
-  const flow = new OAuthWindowFlow({
-    browserApi,
-    fetchImpl: async (url, options) => {
-      assert.equal(new URLSearchParams(options.body).get("code"), "early-code");
-      return jsonResponse({
-        access_token: "access-token",
-        refresh_token: "refresh-token",
-      });
-    },
+  useFetch(async (url, options) => {
+    assert.equal(new URLSearchParams(options.body).get("code"), "early-code");
+    return jsonResponse({
+      access_token: "access-token",
+      refresh_token: "refresh-token",
+    });
   });
+  useMessenger(messengerMock);
+  const flow = new OAuthWindowFlow();
 
   const config = await flow.authorize({
     oauthAuthorizationUrl: "https://auth.example.net/oauth/authorize",
@@ -643,7 +655,7 @@ test("OAuth window flow ignores localhost redirects from other windows", async (
     beforeRequest: null,
     windowRemoved: null,
   };
-  const browserApi = {
+  const messengerMock = {
     i18n: {
       getUILanguage: () => "en-US",
     },
@@ -675,13 +687,12 @@ test("OAuth window flow ignores localhost redirects from other windows", async (
     },
   };
 
-  const flow = new OAuthWindowFlow({
-    browserApi,
-    fetchImpl: async () => jsonResponse({
-      access_token: "access-token",
-      refresh_token: "refresh-token",
-    }),
-  });
+  useFetch(async () => jsonResponse({
+    access_token: "access-token",
+    refresh_token: "refresh-token",
+  }));
+  useMessenger(messengerMock);
+  const flow = new OAuthWindowFlow();
   const authorization = flow.authorize({
     oauthAuthorizationUrl: "https://auth.example.net/oauth/authorize",
     oauthTokenUrl: "https://auth.example.net/oauth/token",
@@ -705,7 +716,7 @@ test("OAuth window flow rejects when the login window is closed", async () => {
     beforeRequest: null,
     windowRemoved: null,
   };
-  const browserApi = {
+  const messengerMock = {
     i18n: {
       getUILanguage: () => "en-US",
     },
@@ -737,7 +748,8 @@ test("OAuth window flow rejects when the login window is closed", async () => {
     },
   };
 
-  const flow = new OAuthWindowFlow({ browserApi });
+  useMessenger(messengerMock);
+  const flow = new OAuthWindowFlow();
   const authorization = flow.authorize({
     oauthAuthorizationUrl: "https://auth.example.net/oauth/authorize",
     oauthTokenUrl: "https://auth.example.net/oauth/token",

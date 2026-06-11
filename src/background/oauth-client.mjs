@@ -44,14 +44,10 @@ export function buildAuthorizationUrl({
 
 export class OAuthWindowFlow {
   constructor({
-    browserApi = globalThis.browser,
-    fetchImpl = defaultFetch,
     callbackUrl = OAUTH_CALLBACK_URL,
     width = OAUTH_WINDOW_WIDTH,
     height = OAUTH_WINDOW_HEIGHT,
   } = {}) {
-    this.browserApi = browserApi;
-    this.fetchImpl = fetchImpl;
     this.callbackUrl = callbackUrl;
     this.width = width;
     this.height = height;
@@ -73,13 +69,13 @@ export class OAuthWindowFlow {
       resource: config.sessionUrl,
       clientId: config.oauthClientId,
       loginHint,
-      uiLanguage: this.browserApi.i18n?.getUILanguage?.() || "",
+      uiLanguage: messenger.i18n?.getUILanguage?.() || "",
     });
 
     const redirectWaiter = this.#createRedirectWaiter(state, messages.canceled);
     let wnd = null;
     try {
-      wnd = await this.browserApi.windows.create({
+      wnd = await messenger.windows.create({
         titlePreface,
         type: "popup",
         url: authUrl,
@@ -93,11 +89,10 @@ export class OAuthWindowFlow {
     }
 
     const redirectedUrl = await redirectWaiter.promise;
-    await this.browserApi.windows.remove(wnd.id);
+    await messenger.windows.remove(wnd.id);
 
     const { code } = parseOAuthRedirect(redirectedUrl, state, messages);
     const token = await exchangeAuthorizationCode({
-      fetchImpl: this.fetchImpl,
       tokenUrl: endpoints.tokenUrl,
       code,
       redirectUrl: this.callbackUrl,
@@ -131,11 +126,11 @@ export class OAuthWindowFlow {
         }
 
         settled = true;
-        this.browserApi.webRequest.onBeforeRequest.removeListener(requestListener);
+        messenger.webRequest.onBeforeRequest.removeListener(requestListener);
         for (const [event, listener] of navigationListeners) {
           event.removeListener(listener);
         }
-        this.browserApi.windows.onRemoved.removeListener(windowListener);
+        messenger.windows.onRemoved.removeListener(windowListener);
       };
       const requestListener = details => {
         if (windowId != null && typeof details.windowId == "number" && details.windowId != windowId) {
@@ -156,11 +151,11 @@ export class OAuthWindowFlow {
         }
       };
 
-      this.browserApi.windows.onRemoved.addListener(windowListener);
-      this.browserApi.webRequest.onBeforeRequest.addListener(requestListener, {
+      messenger.windows.onRemoved.addListener(windowListener);
+      messenger.webRequest.onBeforeRequest.addListener(requestListener, {
         urls: callbackUrlPatterns(this.callbackUrl),
       });
-      for (const event of navigationEvents(this.browserApi)) {
+      for (const event of navigationEvents()) {
         event.addListener(requestListener, {
           url: callbackUrlNavigationFilters(this.callbackUrl),
         });
@@ -198,12 +193,12 @@ function callbackUrlNavigationFilters(callbackUrl) {
   }];
 }
 
-function navigationEvents(browserApi) {
+function navigationEvents() {
   return [
-    browserApi.webNavigation?.onBeforeNavigate,
-    browserApi.webNavigation?.onCommitted,
-    browserApi.webNavigation?.onCompleted,
-    browserApi.webNavigation?.onErrorOccurred,
+    messenger.webNavigation?.onBeforeNavigate,
+    messenger.webNavigation?.onCommitted,
+    messenger.webNavigation?.onCompleted,
+    messenger.webNavigation?.onErrorOccurred,
   ].filter(Boolean);
 }
 
@@ -217,7 +212,6 @@ function isExpectedOAuthRedirect(urlValue, expectedState) {
 }
 
 export async function exchangeAuthorizationCode({
-  fetchImpl = defaultFetch,
   tokenUrl,
   code,
   redirectUrl,
@@ -225,7 +219,7 @@ export async function exchangeAuthorizationCode({
   clientId = OPEN_CLIENT_ID,
   signal = null,
 }) {
-  return postTokenRequest(fetchImpl, tokenUrl, {
+  return postTokenRequest(tokenUrl, {
     client_id: normalizeClientId(clientId),
     grant_type: "authorization_code",
     code,
@@ -235,13 +229,12 @@ export async function exchangeAuthorizationCode({
 }
 
 export async function refreshAccessToken({
-  fetchImpl = defaultFetch,
   tokenUrl,
   refreshToken,
   clientId = OPEN_CLIENT_ID,
   signal = null,
 }) {
-  return postTokenRequest(fetchImpl, tokenUrl, {
+  return postTokenRequest(tokenUrl, {
     client_id: normalizeClientId(clientId),
     grant_type: "refresh_token",
     refresh_token: refreshToken,
@@ -284,12 +277,11 @@ export async function resolveOAuthEndpoints({
 }
 
 export async function discoverOAuthEndpoints({
-  fetchImpl = defaultFetch,
   issuerUrl,
 }) {
   const issuer = normalizeIssuer(issuerUrl);
   const metadataUrl = `${issuer}/.well-known/oauth-authorization-server`;
-  const response = await fetchImpl(metadataUrl, { method: "GET" });
+  const response = await fetch(metadataUrl, { method: "GET" });
 
   if (!response.ok) {
     throw new Error(`OAuth metadata discovery failed with HTTP ${response.status}.`);
@@ -355,8 +347,8 @@ export function parseOAuthRedirect(redirectedUrl, expectedState, messages = {}) 
   return { code };
 }
 
-async function postTokenRequest(fetchImpl, tokenUrl, body, { signal = null } = {}) {
-  const response = await fetchImpl(tokenUrl, {
+async function postTokenRequest(tokenUrl, body, { signal = null } = {}) {
+  const response = await fetch(tokenUrl, {
     method: "POST",
     headers: {
       "Content-Type": "application/x-www-form-urlencoded",
@@ -376,10 +368,6 @@ async function postTokenRequest(fetchImpl, tokenUrl, body, { signal = null } = {
   }
 
   return normalizeTokenResponse(await response.json());
-}
-
-function defaultFetch(url, options) {
-  return globalThis.fetch(url, options);
 }
 
 function randomUrlSafeString(length) {

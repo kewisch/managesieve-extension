@@ -1,5 +1,5 @@
 import assert from "node:assert/strict";
-import test from "node:test";
+import test, { afterEach } from "node:test";
 
 import { JmapSieveProvider } from "../src/background/jmap-provider.mjs";
 import { ProviderError } from "../src/background/provider-error.mjs";
@@ -43,14 +43,19 @@ function jsonResponse(body, init = {}) {
   });
 }
 
+const originalFetch = globalThis.fetch;
+
+afterEach(() => {
+  globalThis.fetch = originalFetch;
+});
+
 function makeProvider(handler) {
   const calls = [];
-  const provider = new JmapSieveProvider({
-    fetchImpl: async (url, options = {}) => {
-      calls.push({ url: String(url), options });
-      return handler(String(url), options, calls.length - 1);
-    },
-  });
+  globalThis.fetch = async (url, options = {}) => {
+    calls.push({ url: String(url), options });
+    return handler(String(url), options, calls.length - 1);
+  };
+  const provider = new JmapSieveProvider();
   return { provider, calls };
 }
 

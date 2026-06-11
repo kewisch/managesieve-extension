@@ -18,7 +18,9 @@ import {
   getInitialSelection,
   getDefaultServerAddress,
   getSelectedView,
-  getVisibleAuthFieldIds,
+  getTcpPermissionOrigin,
+  getTcpSecurityOptions,
+  getVisibleConfigFieldIds,
   hasActiveScriptAfterRefresh,
   isScriptActiveAfterRefresh,
   visibleAccounts,
@@ -210,7 +212,11 @@ async function loadScript(accountId, scriptId) {
   if (!response.ok) {
     state.editor.error = response.error;
   } else {
-    state.editor = getLoadedEditorState(script, response.content || "", message("scriptLoaded"));
+    if (response.scripts) {
+      state.scriptsByAccount[accountId] = response.scripts;
+    }
+
+    state.editor = getLoadedEditorState(response.script || script, response.content || "", message("scriptLoaded"));
   }
 
   render();
@@ -226,11 +232,13 @@ function renderConfigureView(accountId) {
   rows.push(
     ["serverTypeLabel", radioGroup("provider", getServerTypeOptions(), config.provider || "jmap")],
     ["serverAddressLabel", input("sessionUrl", config.sessionUrl || getDefaultServerAddress(account), message("serverAddressPlaceholder"))],
+    ["tcpPortLabel", input("tcpPort", config.tcpPort || "4190", message("tcpPortPlaceholder"), "number"), ["tcp"]],
+    ["tcpSecurityLabel", select("tcpSecurity", config.tcpSecurity || "starttls", getTcpSecurityOptions()), ["tcp"]],
     ["authTypeLabel", select("authType", config.authType || "bearer", [
       ["bearer", "authBearer"],
       ["basic", "authBasic"],
       ["oauth", "authOAuth"],
-    ])],
+    ]), ["jmap"]],
     ["tokenLabel", input("token", config.token || "", "", "password"), ["bearer"]],
     ["usernameLabel", input("username", config.username || ""), ["basic"]],
     ["passwordLabel", input("password", config.password || "", "", "password"), ["basic"]],
@@ -262,11 +270,13 @@ function renderAddManualServerView() {
       ["displayNameLabel", input("displayName", "", message("displayNamePlaceholder"))],
       ["serverTypeLabel", radioGroup("provider", getServerTypeOptions(), "jmap")],
       ["serverAddressLabel", input("sessionUrl", "", message("serverAddressPlaceholder"))],
+      ["tcpPortLabel", input("tcpPort", "4190", message("tcpPortPlaceholder"), "number"), ["tcp"]],
+      ["tcpSecurityLabel", select("tcpSecurity", "starttls", getTcpSecurityOptions()), ["tcp"]],
       ["authTypeLabel", select("authType", "bearer", [
         ["bearer", "authBearer"],
         ["basic", "authBasic"],
         ["oauth", "authOAuth"],
-      ])],
+      ]), ["jmap"]],
       ["tokenLabel", input("token", "", "", "password"), ["bearer"]],
       ["usernameLabel", input("username", ""), ["basic"]],
       ["passwordLabel", input("password", "", "", "password"), ["basic"]],
@@ -290,6 +300,11 @@ function renderAddManualServerView() {
 
 async function saveConfiguration(accountId) {
   const config = readConfigForm();
+  if (config.provider == "tcp" && !await requestHostPermission(accountId)) {
+    showInlineError({ message: message("hostPermissionDenied") });
+    return false;
+  }
+
   const response = await sendMessage({
     type: "managesieve.saveConfig",
     accountId,
@@ -379,9 +394,15 @@ async function createManualConnection() {
 }
 
 async function saveManualConnection() {
+  const config = readConfigForm();
+  if (config.provider == "tcp" && !await requestHostPermission(null)) {
+    showInlineError({ message: message("hostPermissionDenied") });
+    return;
+  }
+
   const response = await sendMessage({
     type: "managesieve.saveManualConnection",
-    config: readConfigForm(),
+    config,
   });
 
   if (!response.ok) {
@@ -430,19 +451,22 @@ function renderEditorView(accountId, script) {
   let createButton = null;
   let nameInput = null;
   const existingScripts = state.scriptsByAccount[accountId] || [];
+  const validationRequired = state.configs[accountId]?.provider != "tcp";
   const updateCreateButton = () => {
     if (createButton) {
-      createButton.disabled = !canCreateScript(
+      createButton.disabled = state.editor.isSaving || !canCreateScript(
         nameInput?.value || "",
         state.editor.content,
         existingScripts,
-        state.editor.error
+        state.editor.error,
+        { validationRequired }
       );
     }
   };
   const updateSaveButton = () => {
     if (saveButton) {
-      saveButton.disabled = !canSaveScript(isDirty(), state.editor.error);
+      saveButton.disabled = state.editor.isSaving ||
+        !canSaveScript(isDirty(), state.editor.error, { validationRequired });
     }
   };
   const actions = getEditorActionIds(script).map(actionId => {
@@ -451,6 +475,9 @@ function renderEditorView(accountId, script) {
       getEditorActionClass(actionId),
       () => handleEditorAction(actionId, accountId, script)
     );
+    if (state.editor.isSaving) {
+      actionButton.disabled = true;
+    }
     if (actionId == "deleteScript" && script?.isActive) {
       actionButton.disabled = true;
       actionButton.title = message("deleteActiveScriptDisabled");
@@ -478,6 +505,7 @@ function renderEditorView(accountId, script) {
     nameInput = input("scriptName", "", message("scriptNamePlaceholder"));
     nameInput.value = state.editor.scriptName || "";
     nameInput.className = "editor-name-input";
+    nameInput.disabled = state.editor.isSaving;
     nameInput.addEventListener("input", () => {
       state.editor.scriptName = nameInput.value;
       updateCreateButton();
@@ -502,6 +530,7 @@ function renderEditorView(accountId, script) {
   textarea.className = "script-editor";
   textarea.spellcheck = false;
   textarea.value = isNew ? state.editor.content : state.editor.content;
+  textarea.disabled = state.editor.isSaving;
   textarea.addEventListener("input", () => {
     state.editor.content = textarea.value;
     updateCreateButton();
@@ -520,7 +549,11 @@ function renderEditorView(accountId, script) {
 
   contentArea.append(editorShell);
   updateCursor(textarea, cursor);
-  scheduleStatusFade(status);
+  clearTimeout(statusFadeTimer);
+  status.classList.remove("fade-out");
+  if (!state.editor.isSaving) {
+    scheduleStatusFade(status);
+  }
 }
 
 async function validateCurrentScript(accountId, { content = state.editor.content, token = null } = {}) {
@@ -587,7 +620,7 @@ async function saveCurrentScript(accountId, script) {
       return;
     }
 
-    const response = await sendMessage({
+    const response = await sendSaveMessage({
       type: "managesieve.createScript",
       accountId,
       name,
@@ -606,7 +639,7 @@ async function saveCurrentScript(accountId, script) {
     return;
   }
 
-  const response = await sendMessage({
+  const response = await sendSaveMessage({
     type: "managesieve.saveScript",
     accountId,
     scriptId: script.id,
@@ -616,6 +649,27 @@ async function saveCurrentScript(accountId, script) {
   if (handleValidationResponse(response, message("scriptSaved"))) {
     state.editor.originalContent = state.editor.content;
     render();
+  }
+}
+
+async function sendSaveMessage(messageData) {
+  state.editor.isSaving = true;
+  state.editor.error = null;
+  state.editor.status = message("scriptSaving");
+  render();
+
+  try {
+    return await sendMessage(messageData);
+  } catch (error) {
+    return {
+      ok: false,
+      error: {
+        code: "saveFailed",
+        message: error?.message || String(error),
+      },
+    };
+  } finally {
+    state.editor.isSaving = false;
   }
 }
 
@@ -730,6 +784,10 @@ async function deactivateScript(accountId, script) {
 }
 
 function handleEditorAction(actionId, accountId, script) {
+  if (state.editor.isSaving) {
+    return;
+  }
+
   if (actionId == "refreshScripts") {
     return refreshScripts(accountId);
   }
@@ -869,17 +927,21 @@ function syncEditorFeedback() {
 
   const saveButton = contentArea.querySelector('button[data-action-id="saveScript"]');
   if (saveButton) {
-    saveButton.disabled = !canSaveScript(isDirty(), state.editor.error);
+    const validationRequired = state.configs[state.selected?.accountId]?.provider != "tcp";
+    saveButton.disabled = state.editor.isSaving ||
+      !canSaveScript(isDirty(), state.editor.error, { validationRequired });
   }
 
   const createButton = contentArea.querySelector('button[data-action-id="createScript"]');
   if (createButton) {
     const accountId = state.selected?.accountId;
-    createButton.disabled = !canCreateScript(
+    const validationRequired = state.configs[accountId]?.provider != "tcp";
+    createButton.disabled = state.editor.isSaving || !canCreateScript(
       document.getElementById("scriptName")?.value || "",
       state.editor.content,
       state.scriptsByAccount[accountId] || [],
-      state.editor.error
+      state.editor.error,
+      { validationRequired }
     );
   }
 }
@@ -906,11 +968,12 @@ function renderError(error) {
 }
 
 function readConfigForm() {
+  const provider = document.querySelector('input[name="provider"]:checked')?.value || "jmap";
   return {
-    provider: document.querySelector('input[name="provider"]:checked')?.value || "jmap",
+    provider,
     displayName: document.getElementById("displayName")?.value.trim() || "",
     sessionUrl: document.getElementById("sessionUrl")?.value.trim() || "",
-    authType: document.getElementById("authType")?.value || "bearer",
+    authType: provider == "tcp" ? "basic" : document.getElementById("authType")?.value || "bearer",
     token: document.getElementById("token")?.value || "",
     username: document.getElementById("username")?.value || "",
     password: document.getElementById("password")?.value || "",
@@ -920,13 +983,17 @@ function readConfigForm() {
     oauthTokenUrl: document.getElementById("oauthTokenUrl")?.value.trim() || "",
     oauthRegistrationUrl: "",
     oauthScope: document.getElementById("oauthScope")?.value.trim() || DEFAULT_OAUTH_SCOPE,
+    tcpPort: Number(document.getElementById("tcpPort")?.value || 4190),
+    tcpSecurity: document.getElementById("tcpSecurity")?.value || "starttls",
   };
 }
 
 async function requestHostPermission(accountId) {
   const config = readConfigForm();
   const origins = new Set();
-  const sessionOrigin = getDiscoveryOrigin(config.sessionUrl, accountId ? getAccount(accountId) : null);
+  const sessionOrigin = config.provider == "tcp" ?
+    getTcpPermissionOrigin(config.sessionUrl) :
+    getDiscoveryOrigin(config.sessionUrl, accountId ? getAccount(accountId) : null);
   if (sessionOrigin) {
     origins.add(sessionOrigin);
   }
@@ -1009,17 +1076,24 @@ function setAuthVisibilityMetadata(element, fieldId, authTypes) {
 
 function bindAuthFieldVisibility() {
   const authType = document.getElementById("authType");
-  if (!authType) {
+  const providerControls = [...contentArea.querySelectorAll('input[name="provider"]')];
+  if (!authType && !providerControls.length) {
     return;
   }
 
-  const update = () => updateAuthFieldVisibility(authType.value);
-  authType.addEventListener("change", update);
+  const update = () => updateAuthFieldVisibility(
+    document.querySelector('input[name="provider"]:checked')?.value || "jmap",
+    authType?.value || "bearer"
+  );
+  authType?.addEventListener("change", update);
+  for (const control of providerControls) {
+    control.addEventListener("change", update);
+  }
   update();
 }
 
-function updateAuthFieldVisibility(authType) {
-  const visibleFields = new Set(getVisibleAuthFieldIds(authType));
+function updateAuthFieldVisibility(provider, authType) {
+  const visibleFields = getVisibleConfigFieldIds(provider, authType);
   for (const element of contentArea.querySelectorAll("[data-auth-field]")) {
     element.hidden = !visibleFields.has(element.dataset.authField);
   }

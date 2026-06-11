@@ -1,0 +1,108 @@
+[
+  {
+    "namespace": "tcp",
+    "types": [
+      {
+        "id": "ConnectOptions",
+        "type": "object",
+        "properties": {
+          "host": {
+            "type": "string"
+          },
+          "port": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 65535
+          },
+          "security": {
+            "type": "string",
+            "enum": ["plain", "tls"],
+            "optional": true
+          },
+          "connectTimeout": {
+            "type": "integer",
+            "minimum": 1,
+            "optional": true
+          }
+        }
+      }
+    ],
+    "functions": [
+      {
+        "name": "connect",
+        "type": "function",
+        "async": true,
+        "parameters": [
+          {
+            "name": "options",
+            "$ref": "ConnectOptions"
+          }
+        ]
+      },
+      {
+        "name": "read",
+        "type": "function",
+        "async": true,
+        "parameters": [
+          {
+            "name": "socketId",
+            "type": "string"
+          },
+          {
+            "name": "byteCount",
+            "type": "integer",
+            "minimum": 1
+          }
+        ]
+      },
+      {
+        "name": "readLine",
+        "type": "function",
+        "async": true,
+        "parameters": [
+          {
+            "name": "socketId",
+            "type": "string"
+          }
+        ]
+      },
+      {
+        "name": "write",
+        "type": "function",
+        "async": true,
+        "parameters": [
+          {
+            "name": "socketId",
+            "type": "string"
+          },
+          {
+            "name": "data",
+            "type": "string"
+          }
+        ]
+      },
+      {
+        "name": "startTLS",
+        "type": "function",
+        "async": true,
+        "parameters": [
+          {
+            "name": "socketId",
+            "type": "string"
+          }
+        ]
+      },
+      {
+        "name": "close",
+        "type": "function",
+        "async": true,
+        "parameters": [
+          {
+            "name": "socketId",
+            "type": "string"
+          }
+        ]
+      }
+    ]
+  }
+]

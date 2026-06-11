@@ -1,6 +1,8 @@
 import { AccountStorage } from "./account-storage.mjs";
-import { JmapSieveProvider, TcpManageSieveProvider, ProviderError } from "./jmap-provider.mjs";
+import { JmapSieveProvider } from "./jmap-provider.mjs";
 import { OAuthWindowFlow, refreshAccessToken } from "./oauth-client.mjs";
+import { ProviderError } from "./provider-error.mjs";
+import { TcpManageSieveProvider } from "./tcp-provider.mjs";
 
 const messengerApi = globalThis.messenger || globalThis.browser;
 const storage = new AccountStorage(messengerApi.storage.local);
@@ -8,6 +10,7 @@ const providers = {
   jmap: new JmapSieveProvider(),
   tcp: new TcpManageSieveProvider(),
 };
+const SAVE_REQUEST_TIMEOUT_MS = 30000;
 
 messengerApi.action.onClicked.addListener(() => {
   messengerApi.tabs.create({
@@ -86,19 +89,25 @@ async function saveConfig(accountId, config) {
 }
 
 async function createManualConnection(config) {
-  const connection = await providers.jmap.discover(config);
-  const scripts = await providers.jmap.listScripts(connection);
-  const account = await storage.createManualAccount(config);
-  const savedConfig = await storage.getConfig(account.id);
+  const provider = getProviderForConfig(config);
+  let connection = null;
+  try {
+    connection = await provider.discover(config);
+    const scripts = await provider.listScripts(connection);
+    const account = await storage.createManualAccount(config);
+    const savedConfig = await storage.getConfig(account.id);
 
-  return {
-    ok: true,
-    account,
-    config: savedConfig,
-    sessionUrl: connection.sessionUrl,
-    jmapAccountId: connection.jmapAccountId,
-    scripts: scripts.scripts,
-  };
+    return {
+      ok: true,
+      account,
+      config: savedConfig,
+      sessionUrl: connection.sessionUrl,
+      jmapAccountId: connection.jmapAccountId,
+      scripts: scripts.scripts,
+    };
+  } finally {
+    await closeProviderConnection(provider, connection);
+  }
 }
 
 async function saveManualConnection(config) {
@@ -145,58 +154,102 @@ async function authorizeOAuth(config) {
 async function testConnection(accountId, config) {
   const account = await getThunderbirdAccount(accountId);
   const savedConfig = await storage.setConfig(accountId, config);
-  const connection = await discover(account, savedConfig);
-  const scripts = await providers.jmap.listScripts(connection);
+  const { provider, connection } = await getProviderConnection(account, savedConfig);
+  try {
+    const scripts = await provider.listScripts(connection);
 
-  return {
-    ok: true,
-    sessionUrl: connection.sessionUrl,
-    jmapAccountId: connection.jmapAccountId,
-    scripts: scripts.scripts,
-  };
+    return {
+      ok: true,
+      sessionUrl: connection.sessionUrl,
+      jmapAccountId: connection.jmapAccountId,
+      scripts: scripts.scripts,
+    };
+  } finally {
+    await closeProviderConnection(provider, connection);
+  }
 }
 
 async function listScripts(accountId) {
-  const connection = await getConnection(accountId);
-  const scripts = await providers.jmap.listScripts(connection);
-  return {
-    ok: true,
-    ...scripts,
-  };
+  const { provider, connection } = await getConnection(accountId);
+  try {
+    const scripts = await provider.listScripts(connection);
+    return {
+      ok: true,
+      ...scripts,
+    };
+  } finally {
+    await closeProviderConnection(provider, connection);
+  }
 }
 
 async function loadScript(accountId, script) {
-  const connection = await getConnection(accountId);
-  return {
-    ok: true,
-    content: await providers.jmap.loadScript(connection, script),
-  };
+  const { provider, connection } = await getConnection(accountId);
+  try {
+    let content;
+    try {
+      content = await provider.loadScript(connection, script);
+    } catch (error) {
+      if (!shouldRetryStaleBlobLoad(provider, error)) {
+        throw error;
+      }
+
+      const scripts = await provider.listScripts(connection);
+      const refreshedScript = findRefreshedScript(script, scripts.scripts);
+      if (!refreshedScript || refreshedScript.blobId == script?.blobId) {
+        throw error;
+      }
+
+      return {
+        ok: true,
+        content: await provider.loadScript(connection, refreshedScript),
+        scripts: scripts.scripts,
+        script: refreshedScript,
+      };
+    }
+
+    return {
+      ok: true,
+      content,
+    };
+  } finally {
+    await closeProviderConnection(provider, connection);
+  }
 }
 
 async function validateScript(accountId, content) {
-  const connection = await getConnection(accountId);
-  return {
-    ok: true,
-    result: await providers.jmap.validateScript(connection, content),
-  };
+  const { provider, connection } = await getConnection(accountId);
+  try {
+    return {
+      ok: true,
+      result: await provider.validateScript(connection, content),
+    };
+  } finally {
+    await closeProviderConnection(provider, connection);
+  }
 }
 
 async function saveScript(accountId, scriptId, content) {
-  const connection = await getConnection(accountId);
-  const validation = await providers.jmap.validateScript(connection, content);
+  return runTimedSaveOperation(async signal => {
+    const { provider, connection } = await getConnection(accountId, { signal });
+    try {
+      const validation = await validateBeforeWrite(provider, connection, content);
 
-  if (!validation.ok) {
-    return {
-      ok: true,
-      result: validation,
-    };
-  }
+      if (!validation.ok) {
+        return {
+          ok: true,
+          result: validation,
+        };
+      }
 
-  await providers.jmap.saveScript(connection, scriptId, content);
-  return {
-    ok: true,
-    result: { ok: true, error: null },
-  };
+      await provider.saveScript(connection, scriptId, content);
+      return {
+        ok: true,
+        result: { ok: true, error: null },
+      };
+    } finally {
+      await closeProviderConnection(provider, connection);
+    }
+  });
 }
 
 async function createScript(accountId, name, content) {
@@ -207,50 +260,76 @@ async function createScript(accountId, name, content) {
     throw new ProviderError("missingScriptContent", "Script content is required.");
   }
 
-  const connection = await getConnection(accountId);
-  const validation = await providers.jmap.validateScript(connection, content);
+  return runTimedSaveOperation(async signal => {
+    const { provider, connection } = await getConnection(accountId, { signal });
+    try {
+      const validation = await validateBeforeWrite(provider, connection, content);
 
-  if (!validation.ok) {
-    return {
-      ok: true,
-      result: validation,
-    };
+      if (!validation.ok) {
+        return {
+          ok: true,
+          result: validation,
+        };
+      }
+
+      return {
+        ok: true,
+        result: {
+          ok: true,
+          script: await provider.createScript(connection, name, content),
+        },
+      };
+    } finally {
+      await closeProviderConnection(provider, connection);
+    }
+  });
+}
+
+async function validateBeforeWrite(provider, connection, content) {
+  if (provider.validateBeforeWrite === false) {
+    return { ok: true, error: null };
   }
 
-  return {
-    ok: true,
-    result: {
-      ok: true,
-      script: await providers.jmap.createScript(connection, name, content),
-    },
-  };
+  return provider.validateScript(connection, content);
 }
 
 async function deleteScript(accountId, scriptId) {
-  const connection = await getConnection(accountId);
-  return {
-    ok: true,
-    result: await providers.jmap.destroyScript(connection, scriptId),
-  };
+  const { provider, connection } = await getConnection(accountId);
+  try {
+    return {
+      ok: true,
+      result: await provider.destroyScript(connection, scriptId),
+    };
+  } finally {
+    await closeProviderConnection(provider, connection);
+  }
 }
 
 async function setActiveScript(accountId, scriptId) {
-  const connection = await getConnection(accountId);
-  return {
-    ok: true,
-    result: await providers.jmap.setActiveScript(connection, scriptId),
-  };
+  const { provider, connection } = await getConnection(accountId);
+  try {
+    return {
+      ok: true,
+      result: await provider.setActiveScript(connection, scriptId),
+    };
+  } finally {
+    await closeProviderConnection(provider, connection);
+  }
 }
 
 async function deactivateScript(accountId, scriptId) {
-  const connection = await getConnection(accountId);
-  return {
-    ok: true,
-    result: await providers.jmap.deactivateScript(connection, scriptId),
-  };
+  const { provider, connection } = await getConnection(accountId);
+  try {
+    return {
+      ok: true,
+      result: await provider.deactivateScript(connection, scriptId),
+    };
+  } finally {
+    await closeProviderConnection(provider, connection);
+  }
 }
 
-async function getConnection(accountId) {
+async function getConnection(accountId, { signal = null } = {}) {
   const account = await getThunderbirdAccount(accountId);
   let config = await storage.getConfig(accountId);
 
@@ -258,15 +337,19 @@ async function getConnection(accountId) {
     throw new ProviderError("unconfiguredAccount", "This account is not configured for JMAP Sieve.");
   }
 
-  if (config.provider == "tcp") {
-    return providers.tcp.discover(config);
-  }
-
-  config = await refreshOAuthConfig(accountId, config);
-  return discover(account, config);
+  config = await refreshOAuthConfig(accountId, config, { signal });
+  return getProviderConnection(account, { ...config, signal });
 }
 
-async function refreshOAuthConfig(accountId, config) {
+async function getProviderConnection(account, config) {
+  const provider = getProviderForConfig(config);
+  const connection = config.provider == "tcp" ?
+    await provider.discover(config) :
+    await discover(account, config);
+  return { provider, connection };
+}
+
+async function refreshOAuthConfig(accountId, config, { signal = null } = {}) {
   if (config.authType != "oauth" || !config.oauthRefreshToken || !config.oauthTokenUrl) {
     return config;
   }
@@ -279,6 +362,7 @@ async function refreshOAuthConfig(accountId, config) {
     tokenUrl: config.oauthTokenUrl,
     refreshToken: config.oauthRefreshToken,
     clientId: config.oauthClientId,
+    signal,
   });
   return storage.setConfig(accountId, {
     ...config,
@@ -294,6 +378,62 @@ async function discover(account, config) {
     ...config,
     thunderbirdAccount: account,
   });
+}
+
+function getProviderForConfig(config) {
+  if (config.provider == "tcp") {
+    return providers.tcp;
+  }
+
+  return providers.jmap;
+}
+
+function shouldRetryStaleBlobLoad(provider, error) {
+  return provider == providers.jmap &&
+    error instanceof ProviderError &&
+    error.code == "downloadFailed" &&
+    error.details?.status == 404;
+}
+
+function findRefreshedScript(script, scripts = []) {
+  if (!script) {
+    return null;
+  }
+
+  return scripts.find(candidate => candidate.id == script.id) ||
+    scripts.find(candidate => candidate.name && candidate.name == script.name) ||
+    null;
+}
+
+async function closeProviderConnection(provider, connection) {
+  try {
+    await provider?.closeConnection?.(connection);
+  } catch {
+    // Connection cleanup should not replace the operation result.
+  }
+}
+
+async function runTimedSaveOperation(operation) {
+  const abortController = new AbortController();
+  let timeoutId = null;
+  const operationPromise = Promise.resolve().then(() => operation(abortController.signal));
+  operationPromise.catch(() => {});
+
+  const timeoutPromise = new Promise((resolve, reject) => {
+    timeoutId = setTimeout(() => {
+      abortController.abort();
+      reject(new ProviderError(
+        "saveTimeout",
+        messengerApi.i18n.getMessage("scriptSaveTimeout") || "Saving timed out. The server did not respond."
+      ));
+    }, SAVE_REQUEST_TIMEOUT_MS);
+  });
+
+  try {
+    return await Promise.race([operationPromise, timeoutPromise]);
+  } finally {
+    clearTimeout(timeoutId);
+  }
 }
 
 async function getThunderbirdAccount(accountId) {

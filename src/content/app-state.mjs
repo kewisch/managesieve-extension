@@ -89,6 +89,11 @@ export function getDiscoveryOrigin(sessionUrl, account) {
   return `https://${domain}/*`;
 }
 
+export function getTcpPermissionOrigin(serverAddress) {
+  const host = getTcpHost(serverAddress);
+  return host ? `https://${host}/*` : null;
+}
+
 export function getDefaultServerAddress(account) {
   const email = account?.identities?.find(identity => identity.email)?.email;
   return email?.split("@").pop() || "";
@@ -115,7 +120,34 @@ export function getVisibleAuthFieldIds(authType) {
 export function getServerTypeOptions() {
   return [
     { value: "jmap", l10nId: "serverTypeJmap", checked: true },
+    { value: "tcp", l10nId: "serverTypeTcp", checked: false },
   ];
+}
+
+export function getTcpSecurityOptions() {
+  return [
+    ["starttls", "tcpSecurityStartTls"],
+    ["tls", "tcpSecurityTls"],
+  ];
+}
+
+export function getVisibleConfigFieldIds(provider, authType) {
+  const fieldIds = new Set(["sessionUrl"]);
+
+  if (provider == "tcp") {
+    fieldIds.add("tcpPort");
+    fieldIds.add("tcpSecurity");
+    fieldIds.add("username");
+    fieldIds.add("password");
+    return fieldIds;
+  }
+
+  fieldIds.add("authType");
+  for (const fieldId of getVisibleAuthFieldIds(authType)) {
+    fieldIds.add(fieldId);
+  }
+
+  return fieldIds;
 }
 
 export function getAddManualServerActionIds() {
@@ -162,6 +194,7 @@ export function getEmptyEditorState(overrides = {}) {
     error: null,
     status: "",
     cursor: "",
+    isSaving: false,
     ...overrides,
   };
 }
@@ -175,17 +208,17 @@ export function getLoadedEditorState(script, content, status) {
   });
 }
 
-export function canCreateScript(name, content, existingScripts = [], error = null) {
+export function canCreateScript(name, content, existingScripts = [], error = null, { validationRequired = true } = {}) {
   const normalizedName = name?.trim();
-  if (!normalizedName || !content?.trim() || error) {
+  if (!normalizedName || !content?.trim() || error && validationRequired) {
     return false;
   }
 
   return !existingScripts.some(script => script.name?.trim() == normalizedName);
 }
 
-export function canSaveScript(isDirty, error) {
-  return Boolean(isDirty && !error);
+export function canSaveScript(isDirty, error, { validationRequired = true } = {}) {
+  return Boolean(isDirty && (!error || !validationRequired));
 }
 
 export function getEditorActionIds(script) {
@@ -241,4 +274,17 @@ export function getSidebarItemIcon(item) {
 export function visibleAccounts(accounts) {
   const visibleTypes = new Set(["imap", "pop3", "ews", "manual"]);
   return accounts.filter(account => visibleTypes.has(account.type));
+}
+
+function getTcpHost(serverAddress) {
+  const trimmedAddress = serverAddress?.trim() || "";
+  if (!trimmedAddress) {
+    return "";
+  }
+
+  if (/^[a-z][a-z\d+.-]*:\/\//i.test(trimmedAddress)) {
+    return new URL(trimmedAddress).hostname;
+  }
+
+  return trimmedAddress.replace(/\/.*$/, "").replace(/:\d+$/, "");
 }

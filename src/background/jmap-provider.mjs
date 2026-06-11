@@ -1,18 +1,10 @@
 import { normalizeJmapSessionUrl } from "./server-address.mjs";
+import { ProviderError } from "./provider-error.mjs";
 
 const SIEVE_CAPABILITY = "urn:ietf:params:jmap:sieve";
 const CORE_CAPABILITY = "urn:ietf:params:jmap:core";
 const BLOB_CAPABILITY = "urn:ietf:params:jmap:blob";
 const SIEVE_MIME_TYPE = "application/sieve";
-
-export class ProviderError extends Error {
-  constructor(code, message, details = null) {
-    super(message);
-    this.name = "ProviderError";
-    this.code = code;
-    this.details = details;
-  }
-}
 
 export class JmapSieveProvider {
   constructor({ fetchImpl = defaultFetch } = {}) {
@@ -28,6 +20,7 @@ export class JmapSieveProvider {
     const session = await this.#fetchJson(sessionUrl, {
       method: "GET",
       headers: this.#authHeaders(config),
+      signal: config.signal,
     });
     const jmapAccountId = this.#getSieveAccountId(session);
 
@@ -36,6 +29,7 @@ export class JmapSieveProvider {
       session,
       sessionUrl,
       jmapAccountId,
+      signal: config.signal || null,
     };
   }
 
@@ -64,9 +58,10 @@ export class JmapSieveProvider {
         name: script.name || "script.siv",
         type: SIEVE_MIME_TYPE,
       });
-      const response = await this.fetchImpl(url, {
+      const response = await this.#fetch(url, {
         method: "GET",
         headers: this.#authHeaders(connection.config),
+        signal: connection.signal,
       });
       await this.#ensureHttpOk(response, "downloadFailed");
       return response.text();
@@ -82,7 +77,13 @@ export class JmapSieveProvider {
       "0",
     ], [BLOB_CAPABILITY]);
     const data = this.#getMethodResponse(response, "Blob/get");
-    return data.list?.[0]?.["data:asText"] || "";
+    if (!data.list?.[0]) {
+      throw new ProviderError("downloadFailed", "The selected script blob no longer exists.", {
+        status: 404,
+      });
+    }
+
+    return data.list[0]["data:asText"] || "";
   }
 
   async validateScript(connection, content) {
@@ -276,13 +277,14 @@ export class JmapSieveProvider {
 
   async #uploadScript(connection, content) {
     const url = this.#templateUrl(connection.session.uploadUrl, connection);
-    const response = await this.fetchImpl(url, {
+    const response = await this.#fetch(url, {
       method: "POST",
       headers: {
         ...this.#authHeaders(connection.config),
         "Content-Type": SIEVE_MIME_TYPE,
       },
       body: content,
+      signal: connection.signal,
     });
     await this.#ensureHttpOk(response, "uploadFailed");
     const data = await response.json();
@@ -306,6 +308,7 @@ export class JmapSieveProvider {
         using: [CORE_CAPABILITY, SIEVE_CAPABILITY, ...extraCapabilities],
         methodCalls: [methodCall],
       }),
+      signal: connection.signal,
     });
   }
 
@@ -325,9 +328,16 @@ export class JmapSieveProvider {
   }
 
   async #fetchJson(url, options) {
-    const response = await this.fetchImpl(url, options);
+    const response = await this.#fetch(url, options);
     await this.#ensureHttpOk(response, "httpError");
     return response.json();
+  }
+
+  async #fetch(url, options = {}) {
+    return this.fetchImpl(url, {
+      ...options,
+      cache: "no-store",
+    });
   }
 
   async #ensureHttpOk(response, code) {
@@ -341,7 +351,10 @@ export class JmapSieveProvider {
     } catch (error) {
       details = String(error);
     }
-    throw new ProviderError(code, `The server returned HTTP ${response.status}.`, details);
+    throw new ProviderError(code, `The server returned HTTP ${response.status}.`, {
+      status: response.status,
+      body: details,
+    });
   }
 
   #authHeaders(config) {
@@ -396,46 +409,4 @@ export class JmapSieveProvider {
 
 function defaultFetch(url, options) {
   return globalThis.fetch(url, options);
-}
-
-export class TcpManageSieveProvider {
-  async discover() {
-    throw this.#unsupported();
-  }
-
-  async listScripts() {
-    throw this.#unsupported();
-  }
-
-  async loadScript() {
-    throw this.#unsupported();
-  }
-
-  async validateScript() {
-    throw this.#unsupported();
-  }
-
-  async saveScript() {
-    throw this.#unsupported();
-  }
-
-  async createScript() {
-    throw this.#unsupported();
-  }
-
-  async destroyScript() {
-    throw this.#unsupported();
-  }
-
-  async setActiveScript() {
-    throw this.#unsupported();
-  }
-
-  async deactivateScript() {
-    throw this.#unsupported();
-  }
-
-  #unsupported() {
-    return new ProviderError("unsupportedProvider", "Direct TCP MANAGESIEVE connections are not implemented yet.");
-  }
 }

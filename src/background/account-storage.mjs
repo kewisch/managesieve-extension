@@ -19,9 +19,10 @@ export class AccountStorage {
 
   async setConfig(accountId, config) {
     const configs = await this.getAllConfigs();
+    const provider = config.provider || "jmap";
     configs[accountId] = {
       provider: "jmap",
-      authType: "bearer",
+      authType: provider == "tcp" ? "basic" : "bearer",
       sessionUrl: "",
       token: "",
       username: "",
@@ -34,6 +35,8 @@ export class AccountStorage {
       oauthScope: "",
       oauthRefreshToken: "",
       oauthExpiresAt: null,
+      tcpPort: 4190,
+      tcpSecurity: "starttls",
       ...config,
     };
     await this.storageArea.set({ [CONFIG_KEY]: configs });

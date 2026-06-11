@@ -31,6 +31,22 @@
   "optional_permissions": [
     "https://*/*"
   ],
+  "experiment_apis": {
+    "tcp": {
+      "schema": "experiments/tcp/schema.json",
+      "parent": {
+        "scopes": [
+          "addon_parent"
+        ],
+        "paths": [
+          [
+            "tcp"
+          ]
+        ],
+        "script": "experiments/tcp/api.js"
+      }
+    }
+  },
   "options_ui": {
     "page": "content/manage.html",
     "open_in_tab": true,

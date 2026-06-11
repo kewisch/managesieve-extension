@@ -39,7 +39,7 @@
     "message": "Add Sieve Server"
   },
   "addServerHint": {
-    "message": "Add a JMAP Sieve server that is not tied to an existing Thunderbird account."
+    "message": "Add a Sieve server that is not tied to an existing Thunderbird account."
   },
   "displayNameLabel": {
     "message": "Display Name:"
@@ -61,11 +61,29 @@
   "serverTypeJmap": {
     "message": "JMAP"
   },
+  "serverTypeTcp": {
+    "message": "TCP ManageSieve"
+  },
   "serverAddressLabel": {
     "message": "Server Address:"
   },
   "serverAddressPlaceholder": {
     "message": "mail.example.com"
+  },
+  "tcpPortLabel": {
+    "message": "Port:"
+  },
+  "tcpPortPlaceholder": {
+    "message": "4190"
+  },
+  "tcpSecurityLabel": {
+    "message": "Security:"
+  },
+  "tcpSecurityStartTls": {
+    "message": "STARTTLS"
+  },
+  "tcpSecurityTls": {
+    "message": "TLS"
   },
   "authTypeLabel": {
     "message": "Authentication:"
@@ -148,7 +166,7 @@
     }
   },
   "hostPermissionDenied": {
-    "message": "Host permission was not granted for the configured JMAP server."
+    "message": "Host permission was not granted for the configured server."
   },
   "connectionSuccessful": {
     "message": "Connection successful"
@@ -209,6 +227,12 @@
   },
   "saveScript": {
     "message": "Save"
+  },
+  "scriptSaving": {
+    "message": "Saving..."
+  },
+  "scriptSaveTimeout": {
+    "message": "Saving timed out. The server did not respond."
   },
   "scriptNameLabel": {
     "message": "Script Name:"

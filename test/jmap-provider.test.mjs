@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import test from "node:test";
 
-import { JmapSieveProvider, ProviderError, TcpManageSieveProvider } from "../src/background/jmap-provider.mjs";
+import { JmapSieveProvider } from "../src/background/jmap-provider.mjs";
+import { ProviderError } from "../src/background/provider-error.mjs";
 
 const SESSION = {
   capabilities: {
@@ -541,12 +542,4 @@ test("returns invalidSieve details from validation", async () => {
       description: "line 1: expected command",
     },
   });
-});
-
-test("TCP ManageSieve provider is a clear unsupported stub", async () => {
-  const provider = new TcpManageSieveProvider();
-  await assert.rejects(
-    () => provider.listScripts(),
-    error => error instanceof ProviderError && error.code == "unsupportedProvider"
-  );
 });

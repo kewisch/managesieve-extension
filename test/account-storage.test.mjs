@@ -52,11 +52,31 @@ test("creates manual server accounts with saved JMAP configuration", async () =>
     oauthClientId: "open",
     oauthTokenUrl: "",
     oauthRegistrationUrl: "",
-    oauthScope: "",
-    oauthRefreshToken: "",
-    oauthExpiresAt: null,
-    displayName: "External Sieve",
+      oauthScope: "",
+      oauthRefreshToken: "",
+      oauthExpiresAt: null,
+      tcpPort: 4190,
+      tcpSecurity: "starttls",
+      displayName: "External Sieve",
+    });
+});
+
+test("stores TCP ManageSieve configuration with TCP defaults", async () => {
+  const { area } = makeStorage();
+  const storage = new AccountStorage(area);
+
+  const config = await storage.setConfig("account1", {
+    provider: "tcp",
+    sessionUrl: "sieve.example.net",
+    username: "user",
+    password: "pass",
   });
+
+  assert.equal(config.provider, "tcp");
+  assert.equal(config.sessionUrl, "sieve.example.net");
+  assert.equal(config.tcpPort, 4190);
+  assert.equal(config.tcpSecurity, "starttls");
+  assert.equal(config.authType, "basic");
 });
 
 test("removes a manual account and its saved configuration", async () => {

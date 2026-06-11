@@ -223,6 +223,7 @@ export async function exchangeAuthorizationCode({
   redirectUrl,
   codeVerifier,
   clientId = OPEN_CLIENT_ID,
+  signal = null,
 }) {
   return postTokenRequest(fetchImpl, tokenUrl, {
     client_id: normalizeClientId(clientId),
@@ -230,7 +231,7 @@ export async function exchangeAuthorizationCode({
     code,
     redirect_uri: redirectUrl,
     code_verifier: codeVerifier,
-  });
+  }, { signal });
 }
 
 export async function refreshAccessToken({
@@ -238,12 +239,13 @@ export async function refreshAccessToken({
   tokenUrl,
   refreshToken,
   clientId = OPEN_CLIENT_ID,
+  signal = null,
 }) {
   return postTokenRequest(fetchImpl, tokenUrl, {
     client_id: normalizeClientId(clientId),
     grant_type: "refresh_token",
     refresh_token: refreshToken,
-  });
+  }, { signal });
 }
 
 export function normalizeClientId(clientId) {
@@ -353,13 +355,14 @@ export function parseOAuthRedirect(redirectedUrl, expectedState, messages = {}) 
   return { code };
 }
 
-async function postTokenRequest(fetchImpl, tokenUrl, body) {
+async function postTokenRequest(fetchImpl, tokenUrl, body, { signal = null } = {}) {
   const response = await fetchImpl(tokenUrl, {
     method: "POST",
     headers: {
       "Content-Type": "application/x-www-form-urlencoded",
     },
     body: new URLSearchParams(body).toString(),
+    signal,
   });
 
   if (!response.ok) {

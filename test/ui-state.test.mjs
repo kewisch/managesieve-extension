@@ -8,11 +8,15 @@ import {
   getInitialSelection,
   getDefaultServerAddress,
   getDiscoveryOrigin,
+  getTcpPermissionOrigin,
   getButtonLabelIds,
   getDeleteDialogModel,
   getEditorActionIds,
+  getServerTypeOptions,
+  getTcpSecurityOptions,
   getLoadedEditorState,
   getVisibleAuthFieldIds,
+  getVisibleConfigFieldIds,
   hasActiveScriptAfterRefresh,
   isScriptActiveAfterRefresh,
   visibleAccounts,
@@ -119,6 +123,35 @@ test("visible auth fields match the selected authentication mechanism", () => {
   ]);
 });
 
+test("server type options include explicit TCP ManageSieve", () => {
+  assert.deepEqual(getServerTypeOptions(), [
+    { value: "jmap", l10nId: "serverTypeJmap", checked: true },
+    { value: "tcp", l10nId: "serverTypeTcp", checked: false },
+  ]);
+  assert.deepEqual(getTcpSecurityOptions(), [
+    ["starttls", "tcpSecurityStartTls"],
+    ["tls", "tcpSecurityTls"],
+  ]);
+});
+
+test("visible config fields switch between JMAP and TCP providers", () => {
+  assert.equal(getVisibleConfigFieldIds("jmap", "oauth").has("oauthAuthorizationUrl"), true);
+  assert.equal(getVisibleConfigFieldIds("jmap", "bearer").has("token"), true);
+  assert.equal(getVisibleConfigFieldIds("tcp", "basic").has("tcpPort"), true);
+  assert.equal(getVisibleConfigFieldIds("tcp", "basic").has("tcpSecurity"), true);
+  assert.equal(getVisibleConfigFieldIds("tcp", "basic").has("username"), true);
+  assert.equal(getVisibleConfigFieldIds("tcp", "basic").has("password"), true);
+  assert.equal(getVisibleConfigFieldIds("tcp", "basic").has("token"), false);
+  assert.equal(getVisibleConfigFieldIds("tcp", "basic").has("oauthAuthorizationUrl"), false);
+});
+
+test("TCP permission origin uses an https host marker", () => {
+  assert.equal(getTcpPermissionOrigin("sieve.example.net"), "https://sieve.example.net/*");
+  assert.equal(getTcpPermissionOrigin("sieve.example.net:4190"), "https://sieve.example.net/*");
+  assert.equal(getTcpPermissionOrigin("https://sieve.example.net/.well-known/jmap"), "https://sieve.example.net/*");
+  assert.equal(getTcpPermissionOrigin(""), null);
+});
+
 test("visible accounts include mail and manual servers only", () => {
   assert.deepEqual(visibleAccounts([
     { id: "imap1", type: "imap", name: "IMAP" },
@@ -169,6 +202,7 @@ test("loaded editor state clears stale errors for a newly selected script", () =
     error: null,
     status: "Script loaded",
     cursor: "",
+    isSaving: false,
   });
 });
 
@@ -179,6 +213,13 @@ test("new scripts require both a name and content before create is enabled", () 
   assert.equal(canCreateScript("name.siv", ""), false);
   assert.equal(canCreateScript("name.siv", "  \n"), false);
   assert.equal(canCreateScript("name.siv", "keep;", [], { code: "invalidSieve" }), false);
+});
+
+test("new TCP scripts can be created despite stale validation errors", () => {
+  assert.equal(
+    canCreateScript("name.siv", "keep;", [], { code: "invalidSieve" }, { validationRequired: false }),
+    true
+  );
 });
 
 test("new scripts cannot reuse an existing script name", () => {
@@ -196,6 +237,10 @@ test("existing scripts can only be saved when dirty and valid", () => {
   assert.equal(canSaveScript(true, null), true);
   assert.equal(canSaveScript(false, null), false);
   assert.equal(canSaveScript(true, { code: "invalidSieve" }), false);
+});
+
+test("existing TCP scripts can be saved despite stale validation errors", () => {
+  assert.equal(canSaveScript(true, { code: "invalidSieve" }, { validationRequired: false }), true);
 });
 
 test("refreshed script list confirms whether a selected script is active", () => {

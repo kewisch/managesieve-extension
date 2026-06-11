@@ -44,10 +44,14 @@ let autoValidationToken = 0;
 
 const sidebar = document.getElementById("accountSidebar");
 const contentArea = document.getElementById("contentArea");
+const welcomeBanner = document.getElementById("welcomeBanner");
 const addServerButton = document.getElementById("addServerButton");
 const refreshAccountsButton = document.getElementById("refreshAccountsButton");
 
 localizeDocument();
+if (globalThis.location?.search == "?welcome") {
+  welcomeBanner.hidden = false;
+}
 addServerButton.addEventListener("click", () => selectAddManualServer());
 refreshAccountsButton.addEventListener("click", () => loadAccounts());
 await loadAccounts();
@@ -253,9 +257,7 @@ function renderConfigureView(accountId) {
       () => handleConfigureAction(actionId, accountId)
     )))]
   );
-  contentArea.replaceChildren();
-
-  contentArea.append(
+  contentArea.replaceChildren(
     header(message("configureTitle", [account?.name || accountId]), []),
     formRowset(rows)
   );
@@ -263,8 +265,7 @@ function renderConfigureView(accountId) {
 }
 
 function renderAddManualServerView() {
-  contentArea.replaceChildren();
-  contentArea.append(
+  contentArea.replaceChildren(
     header(message("addServerTitle"), []),
     formRowset([
       ["displayNameLabel", input("displayName", "", message("displayNamePlaceholder"))],

@@ -13,22 +13,33 @@ const providers = {
 const SAVE_REQUEST_TIMEOUT_MS = 30000;
 const MANAGE_SIEVE_MENU_ID = "manageSieveToolsMenu";
 
-messengerApi.menus.create({
-  id: MANAGE_SIEVE_MENU_ID,
-  title: messengerApi.i18n.getMessage("extensionName"),
-  contexts: ["tools_menu"],
-  type: "normal",
-});
+messengerApi.runtime.onStartup.addListener(() => createManageSieveMenu());
 
 messengerApi.menus.onClicked.addListener(info => {
   if (info.menuItemId == MANAGE_SIEVE_MENU_ID) {
-    openManageSieve();
+    openManagePage();
   }
 });
 
-function openManageSieve() {
+messengerApi.runtime.onInstalled.addListener(details => {
+  if (details.reason == "install") {
+    createManageSieveMenu();
+    openManagePage({ showWelcome: true });
+  }
+});
+
+function createManageSieveMenu() {
+  messengerApi.menus.create({
+    id: MANAGE_SIEVE_MENU_ID,
+    title: messengerApi.i18n.getMessage("extensionName"),
+    contexts: ["tools_menu"],
+    type: "normal",
+  });
+}
+
+function openManagePage({ showWelcome = false } = {}) {
   messengerApi.tabs.create({
-    url: messengerApi.runtime.getURL("content/manage.html"),
+    url: messengerApi.runtime.getURL(`content/manage.html${showWelcome ? "?welcome" : ""}`),
   });
 }
 

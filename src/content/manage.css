@@ -7,6 +7,8 @@
   --selected-border: light-dark(#0a84ff, #0a84ff);
   --text-color: light-dark(#15141a, #fbfbfe);
   --muted-color: light-dark(#5b5b66, #cfcfd8);
+  --welcome-background: light-dark(#eaf4ff, #102d45);
+  --welcome-border: light-dark(#80bfff, #2f78bd);
   --error-color: light-dark(#c50042, #ff9aa8);
   --button-background: light-dark(#f1f1f4, #3a3a3f);
   font: menu;
@@ -203,6 +205,30 @@ textarea {
   font-weight: 400;
 }
 
+.welcome-banner {
+  margin-block-end: 22px;
+  padding: 12px 14px;
+  border: 1px solid var(--welcome-border);
+  border-radius: 4px;
+  background: var(--welcome-background);
+}
+
+.welcome-banner h2 {
+  margin: 0 0 4px;
+  font-size: 1rem;
+  font-weight: 600;
+}
+
+.welcome-banner p {
+  margin: 0;
+  color: var(--muted-color);
+  line-height: 1.4;
+}
+
+.welcome-banner p + p {
+  margin-block-start: 6px;
+}
+
 .toolbar {
   display: flex;
   flex-wrap: wrap;
@@ -313,7 +339,7 @@ input:disabled {
   opacity: 0;
 }
 
-.content-area > .status-line {
+#contentArea > .status-line {
   margin-block-start: 18px;
 }
 

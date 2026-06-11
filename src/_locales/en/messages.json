@@ -41,6 +41,18 @@
   "addServerHint": {
     "message": "Add a Sieve server that is not tied to an existing Thunderbird account."
   },
+  "welcomeBannerTitle": {
+    "message": "Welcome to the Manage Sieve Extension!"
+  },
+  "welcomeBannerMessage": {
+    "message": "Manage Sieve helps you work with server-side mail filters directly in Thunderbird. Connect a Sieve service, edit your scripts, validate changes, and choose the active script for each account."
+  },
+  "welcomeBannerGettingStartedMessage": {
+    "message": "To get started, configure the Sieve server for one of your existing accounts, or use the + button to manually add a server."
+  },
+  "welcomeBannerReturnMessage": {
+    "message": "You can return here anytime from Thunderbird's Tools menu."
+  },
   "displayNameLabel": {
     "message": "Display Name:"
   },

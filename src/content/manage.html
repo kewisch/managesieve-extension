@@ -19,7 +19,15 @@
         </div>
         <nav id="accountSidebar" class="account-sidebar"></nav>
       </aside>
-      <section id="contentArea" class="content-area" aria-live="polite"></section>
+      <section class="content-area">
+        <section id="welcomeBanner" class="welcome-banner" aria-labelledby="welcomeBannerTitle" hidden>
+          <h2 id="welcomeBannerTitle" data-i18n="welcomeBannerTitle"></h2>
+          <p data-i18n="welcomeBannerMessage"></p>
+          <p data-i18n="welcomeBannerGettingStartedMessage"></p>
+          <p data-i18n="welcomeBannerReturnMessage"></p>
+        </section>
+        <div id="contentArea" aria-live="polite"></div>
+      </section>
     </main>
   </body>
 </html>

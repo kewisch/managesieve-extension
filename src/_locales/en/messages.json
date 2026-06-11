@@ -1,0 +1,284 @@
+{
+  "extensionName": {
+    "message": "Manage Sieve Filters"
+  },
+  "extensionShortName": {
+    "message": "Manage Sieve"
+  },
+  "extensionDescription": {
+    "message": "Manage server-side filters using Sieve scripts."
+  },
+  "activeScript": {
+    "message": "Active script"
+  },
+  "newScript": {
+    "message": "New Script"
+  },
+  "configure": {
+    "message": "Configure"
+  },
+  "cancel": {
+    "message": "Cancel"
+  },
+  "refreshAccounts": {
+    "message": "Refresh accounts"
+  },
+  "addServer": {
+    "message": "Add Server"
+  },
+  "addServerManually": {
+    "message": "Add server manually"
+  },
+  "saveManualServer": {
+    "message": "Save Server"
+  },
+  "testManualServer": {
+    "message": "Test and Add"
+  },
+  "addServerTitle": {
+    "message": "Add Sieve Server"
+  },
+  "addServerHint": {
+    "message": "Add a JMAP Sieve server that is not tied to an existing Thunderbird account."
+  },
+  "displayNameLabel": {
+    "message": "Display Name:"
+  },
+  "displayNamePlaceholder": {
+    "message": "External Sieve Server"
+  },
+  "configureTitle": {
+    "message": "Sieve Server - $ACCOUNT$",
+    "placeholders": {
+      "account": {
+        "content": "$1"
+      }
+    }
+  },
+  "serverTypeLabel": {
+    "message": "Server Type:"
+  },
+  "serverTypeJmap": {
+    "message": "JMAP"
+  },
+  "serverAddressLabel": {
+    "message": "Server Address:"
+  },
+  "serverAddressPlaceholder": {
+    "message": "mail.example.com"
+  },
+  "authTypeLabel": {
+    "message": "Authentication:"
+  },
+  "authBearer": {
+    "message": "Bearer token"
+  },
+  "authBasic": {
+    "message": "Basic / app password"
+  },
+  "authOAuth": {
+    "message": "OAuth"
+  },
+  "tokenLabel": {
+    "message": "Token:"
+  },
+  "usernameLabel": {
+    "message": "User name:"
+  },
+  "passwordLabel": {
+    "message": "Password:"
+  },
+  "oauthIssuerUrlLabel": {
+    "message": "OAuth Issuer URL:"
+  },
+  "oauthIssuerUrlPlaceholder": {
+    "message": "https://auth.example.com"
+  },
+  "oauthAuthorizationUrlLabel": {
+    "message": "OAuth Authorization URL:"
+  },
+  "oauthAuthorizationUrlPlaceholder": {
+    "message": "https://auth.example.com/oauth/authorize"
+  },
+  "oauthTokenUrlLabel": {
+    "message": "OAuth Token URL:"
+  },
+  "oauthTokenUrlPlaceholder": {
+    "message": "https://auth.example.com/oauth/token"
+  },
+  "oauthClientIdLabel": {
+    "message": "OAuth Client ID:"
+  },
+  "oauthScopeLabel": {
+    "message": "OAuth Scopes:"
+  },
+  "oauthMissingEndpointConfiguration": {
+    "message": "OAuth issuer URL or manual authorization and token URLs are required."
+  },
+  "oauthIncompleteManualEndpoints": {
+    "message": "OAuth authorization URL and token URL are both required when entering endpoints manually."
+  },
+  "oauthCanceled": {
+    "message": "OAuth login was canceled."
+  },
+  "oauthStateMismatch": {
+    "message": "The OAuth response did not match the request state."
+  },
+  "oauthMissingCode": {
+    "message": "The OAuth response did not include an authorization code."
+  },
+  "testConnection": {
+    "message": "Test Connection"
+  },
+  "saveConfiguration": {
+    "message": "Save"
+  },
+  "settingsSaved": {
+    "message": "Settings saved"
+  },
+  "removeManualServer": {
+    "message": "Remove Server"
+  },
+  "removeManualServerConfirm": {
+    "message": "Remove $SERVER$ from Manage Sieve?",
+    "placeholders": {
+      "server": {
+        "content": "$1"
+      }
+    }
+  },
+  "hostPermissionDenied": {
+    "message": "Host permission was not granted for the configured JMAP server."
+  },
+  "connectionSuccessful": {
+    "message": "Connection successful"
+  },
+  "serverSaved": {
+    "message": "Server saved"
+  },
+  "serverRemoved": {
+    "message": "Server removed"
+  },
+  "newScriptTitle": {
+    "message": "New Sieve Script - $ACCOUNT$",
+    "placeholders": {
+      "account": {
+        "content": "$1"
+      }
+    }
+  },
+  "scriptTitle": {
+    "message": "Sieve Script - $SCRIPT$",
+    "placeholders": {
+      "script": {
+        "content": "$1"
+      }
+    }
+  },
+  "refreshScripts": {
+    "message": "Refresh"
+  },
+  "validateScript": {
+    "message": "Validate"
+  },
+  "setActiveScript": {
+    "message": "Activate"
+  },
+  "deactivateScript": {
+    "message": "Deactivate"
+  },
+  "deleteScript": {
+    "message": "Delete"
+  },
+  "deleteDialogTitle": {
+    "message": "Delete script"
+  },
+  "deleteScriptConfirm": {
+    "message": "Delete the script $SCRIPT$? This cannot be undone",
+    "placeholders": {
+      "script": {
+        "content": "$1"
+      }
+    }
+  },
+  "deleteActiveScriptDisabled": {
+    "message": "Active scripts cannot be deleted. Deactivate the script to delete it"
+  },
+  "createScript": {
+    "message": "Create"
+  },
+  "saveScript": {
+    "message": "Save"
+  },
+  "scriptNameLabel": {
+    "message": "Script Name:"
+  },
+  "scriptNamePlaceholder": {
+    "message": "name.siv"
+  },
+  "lineColumn": {
+    "message": "Line $LINE$, Column $COLUMN$",
+    "placeholders": {
+      "line": {
+        "content": "$1"
+      },
+      "column": {
+        "content": "$2"
+      }
+    }
+  },
+  "scriptLoaded": {
+    "message": "Script loaded"
+  },
+  "validationSuccessful": {
+    "message": "Validation successful"
+  },
+  "validationFailed": {
+    "message": "The server reported a Sieve validation error."
+  },
+  "scriptSaved": {
+    "message": "Script saved"
+  },
+  "scriptCreated": {
+    "message": "Script created"
+  },
+  "scriptContentRequired": {
+    "message": "Script content is required"
+  },
+  "scriptNameRequired": {
+    "message": "Script name is required"
+  },
+  "scriptNameAlreadyExists": {
+    "message": "A script with this name already exists"
+  },
+  "scriptActivated": {
+    "message": "Script activated"
+  },
+  "scriptActivationNotConfirmed": {
+    "message": "The server did not report the selected script as active."
+  },
+  "scriptDeactivated": {
+    "message": "Script deactivated"
+  },
+  "scriptDeactivationNotConfirmed": {
+    "message": "The server still reports an active script."
+  },
+  "scriptDeleted": {
+    "message": "Script deleted"
+  },
+  "emptyTitle": {
+    "message": "Manage Sieve"
+  },
+  "emptyHint": {
+    "message": "Select an account, script, or configuration item."
+  },
+  "loadingTitle": {
+    "message": "Manage Sieve"
+  },
+  "loadingAccounts": {
+    "message": "Loading accounts..."
+  },
+  "errorTitle": {
+    "message": "Manage Sieve Error"
+  }
+}

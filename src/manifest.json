@@ -1,0 +1,49 @@
+{
+  "manifest_version": 3,
+  "name": "__MSG_extensionName__",
+  "short_name": "__MSG_extensionShortName__",
+  "author": "Philipp Kewisch",
+  "description": "__MSG_extensionDescription__",
+  "default_locale": "en",
+  "version": "1.0.0",
+  "browser_specific_settings": {
+    "gecko": {
+      "id": "managesieve@mozilla.kewis.ch",
+      "strict_min_version": "128.0"
+    }
+  },
+  "icons": {
+    "16": "images/addon.svg",
+    "32": "images/addon.svg",
+    "48": "images/addon.svg",
+    "128": "images/addon.svg"
+  },
+  "permissions": [
+    "accountsRead",
+    "storage",
+    "webNavigation",
+    "webRequest"
+  ],
+  "host_permissions": [
+    "http://localhost/*",
+    "https://localhost/*"
+  ],
+  "optional_permissions": [
+    "https://*/*"
+  ],
+  "options_ui": {
+    "page": "content/manage.html",
+    "open_in_tab": true,
+    "browser_style": true
+  },
+  "action": {
+    "default_icon": "images/addon.svg",
+    "default_title": "__MSG_extensionName__"
+  },
+  "background": {
+    "scripts": [
+      "background/index.mjs"
+    ],
+    "type": "module"
+  }
+}

@@ -1,0 +1,29 @@
+{
+  "name": "managesieve",
+  "description": "Manage Sieve Filters",
+  "private": true,
+  "author": "Philipp Kewisch",
+  "license": "MPL-2.0",
+  "type": "module",
+  "scripts": {
+    "build": "web-ext build -s src -o",
+    "clean": "rm -rf web-ext-artifacts",
+    "lint": "eslint . && stylelint \"src/**/*.css\"",
+    "test": "node --test",
+    "ci": "npm run lint && npm test && npm run build"
+  },
+  "devDependencies": {
+    "@commitlint/cli": "^19.8.0",
+    "@commitlint/config-conventional": "^19.8.0",
+    "@stylistic/eslint-plugin": "^4.2.0",
+    "conventional-changelog": "^6.0.0",
+    "conventional-changelog-angular": "^8.0.0",
+    "conventional-changelog-cli": "^5.0.0",
+    "eslint": "^9.22.0",
+    "globals": "^15.15.0",
+    "prettier": "^3.5.3",
+    "stylelint": "^16.15.0",
+    "stylelint-prettier": "^5.0.3",
+    "web-ext": "^8.4.0"
+  }
+}

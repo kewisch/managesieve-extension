@@ -1,0 +1,10 @@
+{
+  "extends": [
+    "stylelint-prettier/recommended"
+  ],
+  "ignoreFiles": [
+    "web-ext-artifacts/**/*.css"
+  ],
+  "rules": {
+  }
+}

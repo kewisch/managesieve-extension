@@ -1,0 +1,25 @@
+<!doctype html>
+<html>
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title data-i18n="extensionName"></title>
+    <link rel="stylesheet" href="manage.css">
+    <script type="module" src="manage.mjs"></script>
+  </head>
+  <body>
+    <main class="settings-shell">
+      <aside class="sidebar" aria-labelledby="sidebarTitle">
+        <div class="sidebar-header">
+          <h1 id="sidebarTitle" data-i18n="extensionShortName"></h1>
+          <div class="sidebar-header-actions">
+            <button id="addServerButton" type="button" data-i18n-title="addServerManually" class="icon-button">+</button>
+            <button id="refreshAccountsButton" type="button" data-i18n-title="refreshAccounts" class="icon-button">↻</button>
+          </div>
+        </div>
+        <nav id="accountSidebar" class="account-sidebar"></nav>
+      </aside>
+      <section id="contentArea" class="content-area" aria-live="polite"></section>
+    </main>
+  </body>
+</html>

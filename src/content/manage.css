@@ -1,0 +1,412 @@
+:root {
+  color-scheme: light dark;
+  --sidebar-background: light-dark(#f7f7f9, #232428);
+  --content-background: light-dark(#ffffff, #1c1b22);
+  --border-color: light-dark(#d0d0d7, #3a3a3f);
+  --selected-background: light-dark(#d7ebff, #14395c);
+  --selected-border: light-dark(#0a84ff, #0a84ff);
+  --text-color: light-dark(#15141a, #fbfbfe);
+  --muted-color: light-dark(#5b5b66, #cfcfd8);
+  --error-color: light-dark(#c50042, #ff9aa8);
+  --button-background: light-dark(#f1f1f4, #3a3a3f);
+  font: menu;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body,
+.settings-shell {
+  min-height: 100vh;
+  margin: 0;
+}
+
+body {
+  color: var(--text-color);
+  background: var(--content-background);
+}
+
+button,
+input,
+select,
+textarea {
+  font: inherit;
+}
+
+.settings-shell {
+  display: grid;
+  grid-template-columns: 300px minmax(0, 1fr);
+}
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-height: 100vh;
+  padding: 10px 4px;
+  background: var(--sidebar-background);
+  border-inline-end: 1px solid var(--border-color);
+}
+
+.sidebar-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding-inline: 8px 6px;
+}
+
+.sidebar-header h1 {
+  margin: 0;
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.sidebar-header-actions {
+  display: flex;
+  gap: 4px;
+}
+
+.icon-button {
+  min-width: 28px;
+  min-height: 28px;
+  padding: 0 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background: var(--button-background);
+  color: inherit;
+  line-height: 1;
+}
+
+.account-sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.account-group {
+  display: flex;
+  flex-direction: column;
+}
+
+.account-title {
+  display: grid;
+  grid-template-columns: 16px 18px minmax(0, 1fr);
+  align-items: center;
+  gap: 4px;
+  min-height: 28px;
+  padding: 2px 8px;
+  font-weight: 600;
+}
+
+.account-disclosure {
+  display: block;
+  width: 12px;
+  height: 12px;
+}
+
+.account-icon {
+  display: block;
+  width: 18px;
+  height: 18px;
+}
+
+.account-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.account-items {
+  display: flex;
+  flex-direction: column;
+}
+
+.sidebar-item {
+  display: grid;
+  grid-template-columns: 16px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 6px;
+  min-height: 28px;
+  margin-inline: 34px 4px;
+  padding: 3px 8px;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: inherit;
+  background: transparent;
+  text-align: start;
+}
+
+.sidebar-item:hover,
+.sidebar-item.selected {
+  background: var(--selected-background);
+}
+
+.sidebar-item.selected {
+  border-color: var(--selected-border);
+}
+
+.sidebar-item .item-label {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.item-icon {
+  display: inline-flex;
+  align-items: baseline;
+  justify-content: center;
+  color: var(--muted-color);
+  line-height: 1;
+  text-align: center;
+}
+
+.configure-icon {
+  font-size: 1.4em;
+  transform: translateY(-0.06em);
+}
+
+.active-marker {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 14px;
+  min-width: 14px;
+  height: 14px;
+}
+
+.active-marker img {
+  display: block;
+  width: 12px;
+  height: 12px;
+}
+
+.content-area {
+  min-width: 0;
+  padding: 34px 40px;
+  background: var(--content-background);
+}
+
+.page-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-block-end: 24px;
+}
+
+.page-header h2 {
+  margin: 0;
+  font-size: 1.55rem;
+  font-weight: 400;
+}
+
+.toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  justify-content: flex-end;
+}
+
+.toolbar button,
+.form-grid button,
+.confirm-dialog button {
+  min-height: 32px;
+  padding: 4px 14px;
+  border: 1px solid var(--border-color);
+  border-radius: 4px;
+  background: var(--button-background);
+  color: inherit;
+}
+
+.toolbar button.primary,
+.form-grid button.primary,
+.confirm-dialog button.primary {
+  border-color: #0060df;
+  background: #0060df;
+  color: #ffffff;
+}
+
+.toolbar button.danger,
+.form-grid button.danger,
+.confirm-dialog button.danger {
+  border-color: #c50042;
+  background: #c50042;
+  color: #ffffff;
+}
+
+.toolbar button.stable-action-label {
+  display: inline-grid;
+  align-items: center;
+  justify-items: center;
+}
+
+.toolbar button.stable-action-label .button-label {
+  grid-area: 1 / 1;
+}
+
+.toolbar button.stable-action-label .button-label.hidden {
+  visibility: hidden;
+}
+
+.toolbar button:disabled,
+.form-grid button:disabled,
+.confirm-dialog button:disabled,
+input:disabled {
+  opacity: 0.55;
+}
+
+.form-grid {
+  display: grid;
+  grid-template-columns: 190px minmax(220px, 720px);
+  gap: 12px 14px;
+  align-items: center;
+}
+
+.form-grid label {
+  text-align: end;
+}
+
+.form-grid input,
+.form-grid select,
+.editor-name-input {
+  min-height: 32px;
+  padding: 4px 8px;
+  border: 1px solid var(--border-color);
+  border-radius: 3px;
+  background: Field;
+  color: FieldText;
+}
+
+.radio-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-height: 32px;
+}
+
+.radio-row label {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  text-align: start;
+}
+
+.form-grid .full-row {
+  grid-column: 2;
+}
+
+.status-line,
+.editor-meta,
+.hint {
+  color: var(--muted-color);
+}
+
+.status-line {
+  opacity: 1;
+  transition: opacity 400ms ease-out;
+}
+
+.status-line.fade-out {
+  opacity: 0;
+}
+
+.content-area > .status-line {
+  margin-block-start: 18px;
+}
+
+.error-panel {
+  margin-block: 14px;
+  padding: 10px 12px;
+  border: 1px solid color-mix(in srgb, var(--error-color), transparent 35%);
+  border-radius: 4px;
+  color: var(--error-color);
+  background: color-mix(in srgb, var(--error-color), transparent 92%);
+  white-space: pre-wrap;
+}
+
+.editor-shell {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.editor-meta {
+  display: flex;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 22px;
+}
+
+.script-editor {
+  width: 100%;
+  min-height: 460px;
+  resize: vertical;
+  padding: 10px;
+  border: 1px solid var(--border-color);
+  border-radius: 3px;
+  background: Field;
+  color: FieldText;
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  line-height: 1.45;
+  tab-size: 2;
+}
+
+.confirm-dialog {
+  width: min(420px, calc(100vw - 48px));
+  padding: 18px;
+  border: 1px solid var(--border-color);
+  border-radius: 6px;
+  background: Canvas;
+  color: CanvasText;
+  box-shadow: 0 8px 32px rgb(0 0 0 / 22%);
+}
+
+.confirm-dialog::backdrop {
+  background: rgb(0 0 0 / 28%);
+}
+
+.confirm-dialog h3 {
+  margin: 0 0 10px;
+  font-size: 1.15rem;
+  font-weight: 600;
+}
+
+.confirm-dialog p {
+  margin: 0 0 18px;
+  line-height: 1.45;
+}
+
+.confirm-dialog-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+@media (max-width: 760px) {
+  .settings-shell {
+    grid-template-columns: 1fr;
+  }
+
+  .sidebar {
+    min-height: auto;
+    border-inline-end: 0;
+    border-block-end: 1px solid var(--border-color);
+  }
+
+  .content-area {
+    padding: 22px;
+  }
+
+  .form-grid {
+    grid-template-columns: 1fr;
+  }
+
+  .form-grid label,
+  .form-grid .full-row {
+    grid-column: 1;
+    text-align: start;
+  }
+}

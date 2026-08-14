@@ -1,0 +1,15 @@
+[
+  {
+    "domains": ["thundermail.com", "tb.pro"],
+    "config": {
+      "provider": "jmap",
+      "authType": "oauth",
+      "sessionUrl": "https://mail.thundermail.com/.well-known/jmap",
+      "oauthIssuerUrl": "https://auth.tb.pro/realms/tbpro",
+      "oauthAuthorizationUrl": "https://auth.tb.pro/realms/tbpro/protocol/openid-connect/auth",
+      "oauthTokenUrl": "https://auth.tb.pro/realms/tbpro/protocol/openid-connect/token",
+      "oauthClientId": "desktop",
+      "oauthScope": "openid email offline_access"
+    }
+  }
+]

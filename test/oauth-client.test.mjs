@@ -8,7 +8,10 @@ import {
   OPEN_CLIENT_ID,
   buildAuthorizationUrl,
   discoverOAuthEndpoints,
+  discoverProtectedResourceMetadata,
   exchangeAuthorizationCode,
+  parseOAuthRedirect,
+  parseResourceMetadataFromAuthenticateHeader,
   refreshAccessToken,
   resolveOAuthEndpoints,
 } from "../src/background/oauth-client.mjs";
@@ -196,6 +199,12 @@ test("discovers OAuth URLs from authorization server metadata", async () => {
       authorization_endpoint: "https://auth.example.net/oauth/authorize",
       token_endpoint: "https://auth.example.net/oauth/token",
       registration_endpoint: "https://auth.example.net/oauth/register",
+      response_types_supported: ["code"],
+      grant_types_supported: ["authorization_code", "refresh_token"],
+      token_endpoint_auth_methods_supported: ["none"],
+      code_challenge_methods_supported: ["S256"],
+      authorization_response_iss_parameter_supported: true,
+      scopes_supported: ["urn:ietf:params:oauth:scope:mail", "offline_access"],
     });
   });
 
@@ -207,8 +216,179 @@ test("discovers OAuth URLs from authorization server metadata", async () => {
     issuer: "https://auth.example.net",
     authorizationUrl: "https://auth.example.net/oauth/authorize",
     tokenUrl: "https://auth.example.net/oauth/token",
-    registrationUrl: "https://auth.example.net/oauth/register",
+    scopesSupported: ["urn:ietf:params:oauth:scope:mail", "offline_access"],
   });
+});
+
+test("includes discovered OAuth endpoints when metadata validation fails", async () => {
+  useFetch(async () => jsonResponse({
+    issuer: "https://auth.example.net",
+    authorization_endpoint: "https://auth.example.net/oauth/authorize",
+    token_endpoint: "https://auth.example.net/oauth/token",
+    registration_endpoint: "https://auth.example.net/oauth/register",
+    response_types_supported: ["code"],
+    grant_types_supported: ["authorization_code"],
+    token_endpoint_auth_methods_supported: ["client_secret_basic"],
+    code_challenge_methods_supported: ["S256"],
+    authorization_response_iss_parameter_supported: true,
+    scopes_supported: ["urn:ietf:params:oauth:scope:mail"],
+  }));
+
+  await assert.rejects(
+    () => discoverOAuthEndpoints({
+      issuerUrl: "https://auth.example.net",
+    }),
+    error => {
+      assert.equal(error.message, "OAuth metadata does not support public clients.");
+      assert.deepEqual(error.details.oauthEndpoints, {
+        issuer: "https://auth.example.net",
+        authorizationUrl: "https://auth.example.net/oauth/authorize",
+        tokenUrl: "https://auth.example.net/oauth/token",
+        scopesSupported: ["urn:ietf:params:oauth:scope:mail"],
+      });
+      return true;
+    }
+  );
+});
+
+test("discovers protected resource metadata and validates the resource identifier", async () => {
+  useFetch(async url => {
+    assert.equal(url, "https://api.example.net/.well-known/oauth-protected-resource/jmap/session");
+    return jsonResponse({
+      resource: "https://api.example.net/jmap/session",
+      authorization_servers: ["https://auth.example.net/acme"],
+      scopes_supported: ["urn:ietf:params:oauth:scope:mail"],
+    });
+  });
+
+  const metadata = await discoverProtectedResourceMetadata({
+    resourceUrl: "https://api.example.net/jmap/session",
+  });
+
+  assert.deepEqual(metadata, {
+    resource: "https://api.example.net/jmap/session",
+    authorizationServers: ["https://auth.example.net/acme"],
+    scopesSupported: ["urn:ietf:params:oauth:scope:mail"],
+    metadataUrl: "https://api.example.net/.well-known/oauth-protected-resource/jmap/session",
+  });
+});
+
+test("rejects protected resource metadata for a different resource", async () => {
+  useFetch(async () => jsonResponse({
+    resource: "https://attacker.example.net/jmap/session",
+    authorization_servers: ["https://auth.example.net"],
+  }));
+
+  await assert.rejects(
+    () => discoverProtectedResourceMetadata({
+      resourceUrl: "https://api.example.net/jmap/session",
+    }),
+    /does not match the JMAP resource/
+  );
+});
+
+test("parses resource metadata URLs from WWW-Authenticate headers", () => {
+  assert.equal(
+    parseResourceMetadataFromAuthenticateHeader(
+      'Bearer realm="jmap", resource_metadata="https://api.example.net/.well-known/oauth-protected-resource"'
+    ),
+    "https://api.example.net/.well-known/oauth-protected-resource"
+  );
+  assert.equal(parseResourceMetadataFromAuthenticateHeader("Basic realm=\"mail\""), "");
+});
+
+test("falls back to OpenID metadata when RFC 8414 metadata is unavailable", async () => {
+  const calls = [];
+  useFetch(async (url, options) => {
+    calls.push({ url, redirect: options.redirect });
+    if (url == "https://auth.example.net/.well-known/oauth-authorization-server/acme") {
+      return new Response("", { status: 404 });
+    }
+
+    assert.equal(url, "https://auth.example.net/acme/.well-known/openid-configuration");
+    return jsonResponse({
+      issuer: "https://auth.example.net/acme",
+      authorization_endpoint: "https://auth.example.net/oauth/authorize",
+      token_endpoint: "https://auth.example.net/oauth/token",
+      registration_endpoint: "https://auth.example.net/oauth/register",
+      response_types_supported: ["code"],
+      grant_types_supported: ["authorization_code", "refresh_token"],
+      token_endpoint_auth_methods_supported: ["none"],
+      code_challenge_methods_supported: ["S256"],
+      authorization_response_iss_parameter_supported: true,
+      scopes_supported: ["urn:ietf:params:oauth:scope:mail"],
+    });
+  });
+
+  const endpoints = await discoverOAuthEndpoints({
+    issuerUrl: "https://auth.example.net/acme",
+  });
+
+  assert.deepEqual(calls, [
+    {
+      url: "https://auth.example.net/.well-known/oauth-authorization-server/acme",
+      redirect: "manual",
+    },
+    {
+      url: "https://auth.example.net/acme/.well-known/openid-configuration",
+      redirect: "manual",
+    },
+  ]);
+  assert.equal(endpoints.issuer, "https://auth.example.net/acme");
+  assert.equal(endpoints.authorizationUrl, "https://auth.example.net/oauth/authorize");
+});
+
+test("treats authorization server metadata redirects as discovery failures", async () => {
+  useFetch(async () => new Response("", {
+    status: 302,
+    headers: { Location: "https://auth.example.net/metadata" },
+  }));
+
+  await assert.rejects(
+    () => discoverOAuthEndpoints({
+      issuerUrl: "https://auth.example.net",
+    }),
+    /OAuth metadata discovery failed/
+  );
+});
+
+test("reports expected and actual issuer values when OAuth metadata issuer mismatches", async () => {
+  useFetch(async () => jsonResponse({
+    issuer: "https://other.example.net",
+    authorization_endpoint: "https://auth.example.net/oauth/authorize",
+    token_endpoint: "https://auth.example.net/oauth/token",
+    response_types_supported: ["code"],
+    grant_types_supported: ["authorization_code"],
+    token_endpoint_auth_methods_supported: ["none"],
+    code_challenge_methods_supported: ["S256"],
+    authorization_response_iss_parameter_supported: true,
+  }));
+
+  await assert.rejects(
+    () => discoverOAuthEndpoints({
+      issuerUrl: "https://auth.example.net",
+    }),
+    /expected https:\/\/auth\.example\.net, got https:\/\/other\.example\.net/
+  );
+});
+
+test("accepts OAuth metadata issuer with an explicit default HTTPS port", async () => {
+  useFetch(async () => jsonResponse({
+    issuer: "https://mail.thundermail.com:443",
+    authorization_endpoint: "https://mail.thundermail.com/oauth/authorize",
+    token_endpoint: "https://mail.thundermail.com/oauth/token",
+    response_types_supported: ["code"],
+    grant_types_supported: ["authorization_code"],
+    token_endpoint_auth_methods_supported: ["none"],
+    code_challenge_methods_supported: ["S256"],
+    authorization_response_iss_parameter_supported: true,
+  }));
+
+  const endpoints = await discoverOAuthEndpoints({
+    issuerUrl: "https://mail.thundermail.com",
+  });
+
+  assert.equal(endpoints.issuer, "https://mail.thundermail.com");
 });
 
 test("uses manual OAuth endpoints without fetching metadata", async () => {
@@ -227,7 +407,6 @@ test("uses manual OAuth endpoints without fetching metadata", async () => {
     issuer: "https://bad-metadata.example.net",
     authorizationUrl: "https://auth.example.net/oauth/authorize",
     tokenUrl: "https://auth.example.net/oauth/token",
-    registrationUrl: "",
   });
 });
 
@@ -244,7 +423,6 @@ test("discovers OAuth endpoints when manual URLs are missing", async () => {
         issuer: "https://auth.example.net",
         authorizationUrl: "https://auth.example.net/oauth/authorize",
         tokenUrl: "https://auth.example.net/oauth/token",
-        registrationUrl: "https://auth.example.net/oauth/register",
       };
     },
   });
@@ -253,8 +431,40 @@ test("discovers OAuth endpoints when manual URLs are missing", async () => {
     issuer: "https://auth.example.net",
     authorizationUrl: "https://auth.example.net/oauth/authorize",
     tokenUrl: "https://auth.example.net/oauth/token",
-    registrationUrl: "https://auth.example.net/oauth/register",
+    scopesSupported: [],
   });
+});
+
+test("OAuth redirects must include the expected issuer when configured", () => {
+  assert.deepEqual(
+    parseOAuthRedirect(
+      `${OAUTH_CALLBACK_URL}?code=authorization-code&state=state-value&iss=https%3A%2F%2Fauth.example.net`,
+      "state-value",
+      {},
+      "https://auth.example.net"
+    ),
+    { code: "authorization-code" }
+  );
+
+  assert.throws(
+    () => parseOAuthRedirect(
+      `${OAUTH_CALLBACK_URL}?code=authorization-code&state=state-value&iss=https%3A%2F%2Fevil.example.net`,
+      "state-value",
+      {},
+      "https://auth.example.net"
+    ),
+    /Expected https:\/\/auth\.example\.net, got https:\/\/evil\.example\.net/
+  );
+
+  assert.throws(
+    () => parseOAuthRedirect(
+      `${OAUTH_CALLBACK_URL}?code=authorization-code&state=state-value`,
+      "state-value",
+      {},
+      "https://auth.example.net"
+    ),
+    /Expected https:\/\/auth\.example\.net, got missing/
+  );
 });
 
 test("OAuth window flow captures localhost redirect and exchanges the code", async () => {
@@ -336,7 +546,7 @@ test("OAuth window flow captures localhost redirect and exchanges the code", asy
   assert.equal(authUrl.searchParams.get("redirect_uri"), OAUTH_CALLBACK_URL);
   assert.equal(authUrl.searchParams.get("client_id"), "open");
   listeners.beforeRequest.listener({
-    url: `${OAUTH_CALLBACK_URL}?code=authorization-code&state=${authUrl.searchParams.get("state")}`,
+    url: `${OAUTH_CALLBACK_URL}?code=authorization-code&state=${authUrl.searchParams.get("state")}&iss=https%3A%2F%2Fauth.example.net`,
   });
 
   const config = await authorization;
@@ -413,7 +623,7 @@ test("OAuth window flow captures HTTPS localhost redirects", async () => {
   await waitFor(() => listeners.beforeRequest);
   assert.deepEqual(listeners.beforeRequest.filter.urls, OAUTH_CALLBACK_URL_PATTERNS);
   listeners.beforeRequest.listener({
-    url: `https://localhost/?code=https-code&state=${new URL(messengerMock.windows.lastCreatedUrl).searchParams.get("state")}`,
+    url: `https://localhost/?code=https-code&state=${new URL(messengerMock.windows.lastCreatedUrl).searchParams.get("state")}&iss=https%3A%2F%2Fauth.example.net`,
   });
 
   const config = await authorization;
@@ -507,7 +717,7 @@ test("OAuth window flow captures localhost callback through webNavigation", asyn
   });
   const state = new URL(createdWindow.url).searchParams.get("state");
   listeners.beforeNavigate.listener({
-    url: `${OAUTH_CALLBACK_URL}?code=navigation-code&state=${state}`,
+    url: `${OAUTH_CALLBACK_URL}?code=navigation-code&state=${state}&iss=https%3A%2F%2Fauth.example.net`,
   });
 
   const config = await authorization;
@@ -598,7 +808,7 @@ test("OAuth window flow registers the redirect listener before opening the login
 
         const state = new URL(createData.url).searchParams.get("state");
         beforeRequest.listener({
-          url: `${OAUTH_CALLBACK_URL}?code=early-code&state=${state}`,
+          url: `${OAUTH_CALLBACK_URL}?code=early-code&state=${state}&iss=https%3A%2F%2Fauth.example.net`,
         });
         return { id: 42 };
       },

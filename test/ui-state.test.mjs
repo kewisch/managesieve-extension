@@ -3,6 +3,7 @@ import test from "node:test";
 
 import {
   buildSidebarModel,
+  bindDefaultFormSubmit,
   canCreateScript,
   canSaveScript,
   getInitialSelection,
@@ -12,6 +13,8 @@ import {
   getButtonLabelIds,
   getDeleteDialogModel,
   getEditorActionIds,
+  getSetupMode,
+  getSimpleSetupModel,
   getServerTypeOptions,
   getTcpSecurityOptions,
   getLoadedEditorState,
@@ -19,6 +22,7 @@ import {
   getVisibleConfigFieldIds,
   hasActiveScriptAfterRefresh,
   isScriptActiveAfterRefresh,
+  shouldRetryJmapAutodetection,
   visibleAccounts,
 } from "../src/content/app-state.mjs";
 
@@ -123,14 +127,107 @@ test("visible auth fields match the selected authentication mechanism", () => {
   ]);
 });
 
+test("setup mode defaults to simple and can switch to advanced or TCP credentials", () => {
+  assert.equal(getSetupMode("account1", {}), "simple");
+  assert.equal(getSetupMode("account1", {}, "advanced"), "advanced");
+  assert.equal(getSetupMode("account1", { account1: "advanced" }), "advanced");
+  assert.equal(getSetupMode("account1", { account1: "simple" }, "advanced"), "simple");
+  assert.equal(getSetupMode("addManualServer", { addManualServer: "tcpCredentials" }), "tcpCredentials");
+  assert.equal(getSetupMode("account1", { account1: "unexpected" }), "simple");
+  assert.equal(getSetupMode("account1", {}, "unexpected"), "simple");
+});
+
+test("simple setup model includes display name and derived JMAP placeholder", () => {
+  assert.deepEqual(getSimpleSetupModel({
+    account: { id: "account1", name: "Mail Account", identities: [{ email: "user@example.net" }] },
+    config: { displayName: "Personal Mail", sessionUrl: "mail.example.net" },
+  }), {
+    displayName: "Personal Mail",
+    serverAddress: "mail.example.net",
+    serverAddressPlaceholder: "https://mail.example.net/.well-known/jmap",
+  });
+  assert.equal(getSimpleSetupModel({
+    account: { identities: [{ email: "user@example.net" }] },
+    config: {},
+  }).serverAddressPlaceholder, "https://example.net/.well-known/jmap");
+});
+
+test("JMAP error forms retry autodetection when the server address changes", () => {
+  assert.equal(shouldRetryJmapAutodetection({
+    error: { code: "oauthDiscoveryFailed" },
+    previousConfig: {
+      provider: "jmap",
+      sessionUrl: "bad.example.net",
+    },
+    currentConfig: {
+      provider: "jmap",
+      sessionUrl: "good.example.net",
+    },
+  }), true);
+  assert.equal(shouldRetryJmapAutodetection({
+    error: { code: "oauthDiscoveryFailed" },
+    previousConfig: {
+      provider: "jmap",
+      sessionUrl: "bad.example.net",
+    },
+    currentConfig: {
+      provider: "jmap",
+      sessionUrl: "https://bad.example.net/.well-known/jmap",
+    },
+  }), false);
+  assert.equal(shouldRetryJmapAutodetection({
+    error: null,
+    previousConfig: {
+      provider: "jmap",
+      sessionUrl: "bad.example.net",
+    },
+    currentConfig: {
+      provider: "jmap",
+      sessionUrl: "good.example.net",
+    },
+  }), false);
+  assert.equal(shouldRetryJmapAutodetection({
+    error: { code: "oauthDiscoveryFailed" },
+    previousConfig: {
+      provider: "jmap",
+      sessionUrl: "bad.example.net",
+    },
+    currentConfig: {
+      provider: "tcp",
+      sessionUrl: "good.example.net",
+    },
+  }), false);
+});
+
+test("default form submit invokes the configured primary action", () => {
+  let submitted = false;
+  const listeners = {};
+  const form = {
+    addEventListener(type, listener) {
+      listeners[type] = listener;
+    },
+  };
+  bindDefaultFormSubmit(form, () => {
+    submitted = true;
+  });
+
+  listeners.submit({
+    preventDefault() {
+      this.prevented = true;
+    },
+  });
+
+  assert.equal(submitted, true);
+});
+
 test("server type options include explicit TCP ManageSieve", () => {
   assert.deepEqual(getServerTypeOptions(), [
     { value: "jmap", l10nId: "serverTypeJmap", checked: true },
     { value: "tcp", l10nId: "serverTypeTcp", checked: false },
   ]);
   assert.deepEqual(getTcpSecurityOptions(), [
-    ["starttls", "tcpSecurityStartTls"],
     ["tls", "tcpSecurityTls"],
+    ["starttls", "tcpSecurityStartTls"],
   ]);
 });
 

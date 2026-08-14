@@ -1,5 +1,12 @@
 import { normalizeJmapSessionUrl } from "../background/server-address.mjs";
 
+export function bindDefaultFormSubmit(form, submitHandler) {
+  form.addEventListener("submit", event => {
+    event.preventDefault();
+    submitHandler();
+  });
+}
+
 export function buildSidebarModel(accounts, scriptsByAccount = {}) {
   return visibleAccounts(accounts).map(account => ({
     id: account.id,
@@ -126,9 +133,44 @@ export function getServerTypeOptions() {
 
 export function getTcpSecurityOptions() {
   return [
-    ["starttls", "tcpSecurityStartTls"],
     ["tls", "tcpSecurityTls"],
+    ["starttls", "tcpSecurityStartTls"],
   ];
+}
+
+export function getSetupMode(key, modes = {}, defaultMode = "simple") {
+  const mode = modes[key];
+  const setupModes = ["simple", "advanced", "tcpCredentials"];
+  if (setupModes.includes(mode)) {
+    return mode;
+  }
+
+  return setupModes.includes(defaultMode) ? defaultMode : "simple";
+}
+
+export function getSimpleSetupModel({ account = null, config = {} } = {}) {
+  const serverAddress = config.sessionUrl || getDefaultServerAddress(account);
+  const placeholderSource = serverAddress || getDefaultServerAddress(account) || "mail.example.com";
+
+  return {
+    displayName: config.displayName || account?.name || "",
+    serverAddress,
+    serverAddressPlaceholder: normalizeJmapSessionUrl(placeholderSource),
+  };
+}
+
+export function shouldRetryJmapAutodetection({
+  error = null,
+  previousConfig = {},
+  currentConfig = {},
+} = {}) {
+  if (!error || previousConfig.provider != "jmap" || currentConfig.provider != "jmap") {
+    return false;
+  }
+
+  const previousSessionUrl = normalizeJmapSessionUrl(previousConfig.sessionUrl);
+  const currentSessionUrl = normalizeJmapSessionUrl(currentConfig.sessionUrl);
+  return Boolean(previousSessionUrl && currentSessionUrl && previousSessionUrl != currentSessionUrl);
 }
 
 export function getVisibleConfigFieldIds(provider, authType) {

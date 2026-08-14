@@ -1,4 +1,9 @@
 import { AccountStorage } from "./account-storage.mjs";
+import {
+  discoverJmapAutoconfig,
+  loadHardcodedServerConfigs,
+  probeTcpAutoconfig,
+} from "./autoconfig.mjs";
 import { JmapSieveProvider } from "./jmap-provider.mjs";
 import { OAuthWindowFlow, refreshAccessToken } from "./oauth-client.mjs";
 import { ProviderError } from "./provider-error.mjs";
@@ -10,6 +15,7 @@ const providers = {
   tcp: new TcpManageSieveProvider(),
 };
 const SAVE_REQUEST_TIMEOUT_MS = 30000;
+let hardcodedServerConfigsPromise = null;
 
 messenger.runtime.onStartup.addListener(() => createManageSieveMenu());
 
@@ -56,6 +62,8 @@ async function handleMessage(message) {
         return await getAccounts();
       case "managesieve.saveConfig":
         return await saveConfig(message.accountId, message.config);
+      case "managesieve.saveDetectedConfig":
+        return await saveDetectedConfig(message.accountId, message.config);
       case "managesieve.saveManualConnection":
         return await saveManualConnection(message.config);
       case "managesieve.createManualConnection":
@@ -64,6 +72,10 @@ async function handleMessage(message) {
         return await removeManualConnection(message.accountId);
       case "managesieve.authorizeOAuth":
         return await authorizeOAuth(message.config);
+      case "managesieve.discoverJmapOAuthConfig":
+        return await discoverJmapOAuthConfig(message.serverAddress, message.accountId);
+      case "managesieve.probeTcpAutoconfig":
+        return await probeTcpAutoconfigMessage(message.config);
       case "managesieve.testConnection":
         return await testConnection(message.accountId, message.config);
       case "managesieve.listScripts":
@@ -109,6 +121,25 @@ async function saveConfig(accountId, config) {
     ok: true,
     config: savedConfig,
   };
+}
+
+async function saveDetectedConfig(accountId, config) {
+  const account = await getThunderbirdAccount(accountId);
+  const { provider, connection } = await getProviderConnection(account, config);
+  try {
+    const scripts = await provider.listScripts(connection);
+    const savedConfig = await storage.setConfig(accountId, config);
+
+    return {
+      ok: true,
+      config: savedConfig,
+      sessionUrl: connection.sessionUrl,
+      jmapAccountId: connection.jmapAccountId,
+      scripts: scripts.scripts,
+    };
+  } finally {
+    await closeProviderConnection(provider, connection);
+  }
 }
 
 async function createManualConnection(config) {
@@ -167,9 +198,40 @@ async function authorizeOAuth(config) {
       },
       messages: {
         canceled: messenger.i18n.getMessage("oauthCanceled"),
+        issuerMismatch: ({ expectedIssuer, actualIssuer }) => messenger.i18n.getMessage("oauthIssuerMismatch", [
+          expectedIssuer,
+          actualIssuer || messenger.i18n.getMessage("oauthIssuerMissing"),
+        ]),
         stateMismatch: messenger.i18n.getMessage("oauthStateMismatch"),
         missingCode: messenger.i18n.getMessage("oauthMissingCode"),
       },
+    }),
+  };
+}
+
+async function discoverJmapOAuthConfig(serverAddress, accountId = null) {
+  const account = accountId ? await getThunderbirdAccount(accountId) : null;
+  return {
+    ok: true,
+    result: await discoverJmapAutoconfig({
+      serverAddress,
+      account,
+      hardcodedConfigs: await getHardcodedServerConfigs(),
+    }),
+  };
+}
+
+function getHardcodedServerConfigs() {
+  hardcodedServerConfigsPromise ??= loadHardcodedServerConfigs();
+  return hardcodedServerConfigsPromise;
+}
+
+async function probeTcpAutoconfigMessage(config) {
+  return {
+    ok: true,
+    result: await probeTcpAutoconfig({
+      provider: providers.tcp,
+      config,
     }),
   };
 }

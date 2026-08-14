@@ -1,5 +1,7 @@
 export const OPEN_CLIENT_ID = "open";
-export const DEFAULT_OAUTH_SCOPE = "urn:ietf:params:jmap:core urn:ietf:params:jmap:sieve";
+export const MAIL_OAUTH_SCOPE = "urn:ietf:params:oauth:scope:mail";
+export const LEGACY_JMAP_SIEVE_OAUTH_SCOPE = "urn:ietf:params:jmap:core urn:ietf:params:jmap:sieve";
+export const DEFAULT_OAUTH_SCOPE = MAIL_OAUTH_SCOPE;
 export const OAUTH_CALLBACK_URL = "http://localhost/";
 export const OAUTH_CALLBACK_URL_PATTERNS = [
   "http://localhost/*",
@@ -91,7 +93,7 @@ export class OAuthWindowFlow {
     const redirectedUrl = await redirectWaiter.promise;
     await messenger.windows.remove(wnd.id);
 
-    const { code } = parseOAuthRedirect(redirectedUrl, state, messages);
+    const { code } = parseOAuthRedirect(redirectedUrl, state, messages, endpoints.issuer);
     const token = await exchangeAuthorizationCode({
       tokenUrl: endpoints.tokenUrl,
       code,
@@ -105,7 +107,6 @@ export class OAuthWindowFlow {
       oauthIssuerUrl: endpoints.issuer,
       oauthAuthorizationUrl: endpoints.authorizationUrl,
       oauthTokenUrl: endpoints.tokenUrl,
-      oauthRegistrationUrl: endpoints.registrationUrl,
       oauthClientId: normalizeClientId(config.oauthClientId),
       token: token.accessToken,
       oauthRefreshToken: token.refreshToken,
@@ -245,6 +246,23 @@ export function normalizeClientId(clientId) {
   return clientId?.trim() || OPEN_CLIENT_ID;
 }
 
+export function getPreferredOAuthScope({
+  resourceScopesSupported = [],
+  authorizationScopesSupported = [],
+} = {}) {
+  const resourceScopes = new Set(resourceScopesSupported);
+  const authorizationScopes = new Set(authorizationScopesSupported);
+  const supportsMailScope = resourceScopes.has(MAIL_OAUTH_SCOPE) ||
+    authorizationScopes.has(MAIL_OAUTH_SCOPE);
+  const scopes = [supportsMailScope ? MAIL_OAUTH_SCOPE : LEGACY_JMAP_SIEVE_OAUTH_SCOPE];
+
+  if (authorizationScopes.has("offline_access")) {
+    scopes.push("offline_access");
+  }
+
+  return scopes.join(" ");
+}
+
 export async function resolveOAuthEndpoints({
   config,
   discover = discoverOAuthEndpoints,
@@ -261,7 +279,6 @@ export async function resolveOAuthEndpoints({
       issuer: config.oauthIssuerUrl ? normalizeIssuer(config.oauthIssuerUrl) : new URL(authorizationUrl).origin,
       authorizationUrl,
       tokenUrl,
-      registrationUrl: config.oauthRegistrationUrl?.trim() || "",
     };
   }
 
@@ -273,34 +290,112 @@ export async function resolveOAuthEndpoints({
     throw new Error(missingConfigurationMessage);
   }
 
-  return discover({ issuerUrl: config.oauthIssuerUrl });
+  return normalizeOAuthEndpoints(await discover({ issuerUrl: config.oauthIssuerUrl }));
 }
 
 export async function discoverOAuthEndpoints({
   issuerUrl,
+  fetchImpl = fetch,
 }) {
   const issuer = normalizeIssuer(issuerUrl);
-  const metadataUrl = `${issuer}/.well-known/oauth-authorization-server`;
-  const response = await fetch(metadataUrl, { method: "GET" });
+  const responses = [
+    await fetchAuthorizationMetadata(authorizationServerMetadataUrl(issuer), fetchImpl),
+  ];
 
-  if (!response.ok) {
-    throw new Error(`OAuth metadata discovery failed with HTTP ${response.status}.`);
+  if (!responses[0].ok) {
+    responses.push(await fetchAuthorizationMetadata(openIdConfigurationUrl(issuer), fetchImpl));
+  }
+
+  const response = responses.find(candidate => candidate.ok);
+
+  if (!response) {
+    throw new Error(`OAuth metadata discovery failed with HTTP ${responses.at(-1).status}.`);
   }
 
   const metadata = await response.json();
-  if (metadata.issuer && metadata.issuer != issuer) {
-    throw new Error("OAuth metadata issuer does not match the requested issuer.");
+  let metadataIssuer = "";
+  try {
+    metadataIssuer = metadata.issuer ? normalizeIssuer(metadata.issuer) : "";
+  } catch (error) {
+    throw new Error(`OAuth metadata issuer is invalid: ${metadata.issuer || "missing"}. ${error.message}`);
+  }
+  if (metadataIssuer != issuer) {
+    throw new Error(`OAuth metadata issuer does not match the requested issuer: expected ${issuer}, got ${metadataIssuer || metadata.issuer || "missing"}.`);
   }
   if (!metadata.authorization_endpoint || !metadata.token_endpoint) {
     throw new Error("OAuth metadata did not include authorization and token endpoints.");
   }
 
-  return {
+  const oauthEndpoints = {
     issuer,
     authorizationUrl: metadata.authorization_endpoint,
     tokenUrl: metadata.token_endpoint,
-    registrationUrl: metadata.registration_endpoint || "",
+    scopesSupported: metadata.scopes_supported || [],
   };
+
+  if (!metadata.response_types_supported?.includes("code")) {
+    throw oauthMetadataError("OAuth metadata does not support authorization code responses.", oauthEndpoints);
+  }
+  if (!metadata.grant_types_supported?.includes("authorization_code")) {
+    throw oauthMetadataError("OAuth metadata does not support authorization code grants.", oauthEndpoints);
+  }
+  if (!metadata.token_endpoint_auth_methods_supported?.includes("none")) {
+    throw oauthMetadataError("OAuth metadata does not support public clients.", oauthEndpoints);
+  }
+  if (!metadata.code_challenge_methods_supported?.includes("S256")) {
+    throw oauthMetadataError("OAuth metadata does not support PKCE S256.", oauthEndpoints);
+  }
+  if (metadata.authorization_response_iss_parameter_supported !== true) {
+    throw oauthMetadataError(
+      "OAuth metadata does not support authorization response issuer identification.",
+      oauthEndpoints
+    );
+  }
+
+  return oauthEndpoints;
+}
+
+export async function discoverProtectedResourceMetadata({
+  resourceUrl,
+  metadataUrl = "",
+  fetchImpl = fetch,
+}) {
+  const normalizedResourceUrl = normalizeResourceUrl(resourceUrl);
+  const resolvedMetadataUrl = metadataUrl || protectedResourceMetadataUrl(normalizedResourceUrl);
+  const response = await fetchImpl(resolvedMetadataUrl, { method: "GET" });
+
+  if (!response.ok) {
+    throw new Error(`Protected resource metadata discovery failed with HTTP ${response.status}.`);
+  }
+
+  const metadata = await response.json();
+  if (metadata.resource != normalizedResourceUrl) {
+    throw new Error("Protected resource metadata does not match the JMAP resource.");
+  }
+  if (!Array.isArray(metadata.authorization_servers) || !metadata.authorization_servers.length) {
+    throw new Error("Protected resource metadata did not include authorization servers.");
+  }
+
+  return {
+    resource: metadata.resource,
+    authorizationServers: metadata.authorization_servers,
+    scopesSupported: metadata.scopes_supported || [],
+    metadataUrl: resolvedMetadataUrl,
+  };
+}
+
+export function parseResourceMetadataFromAuthenticateHeader(headerValue = "") {
+  const bearerIndex = headerValue.toLowerCase().indexOf("bearer ");
+  if (bearerIndex == -1) {
+    return "";
+  }
+
+  const parameters = parseHeaderParameters(headerValue.slice(bearerIndex + "bearer ".length));
+  if (parameters.resource_metadata) {
+    return parameters.resource_metadata;
+  }
+
+  return "";
 }
 
 export async function createPkcePair() {
@@ -328,7 +423,7 @@ export function normalizeTokenResponse(response, now = Date.now()) {
   };
 }
 
-export function parseOAuthRedirect(redirectedUrl, expectedState, messages = {}) {
+export function parseOAuthRedirect(redirectedUrl, expectedState, messages = {}, expectedIssuer = "") {
   const url = redirectedUrl instanceof URL ? redirectedUrl : new URL(redirectedUrl);
   const error = url.searchParams.get("error");
   if (error) {
@@ -338,6 +433,13 @@ export function parseOAuthRedirect(redirectedUrl, expectedState, messages = {}) 
   if (url.searchParams.get("state") != expectedState) {
     throw new Error(messages.stateMismatch || "The OAuth response did not match the request state.");
   }
+  const actualIssuer = url.searchParams.get("iss") || "";
+  if (expectedIssuer && actualIssuer != expectedIssuer) {
+    throw new Error(getOAuthIssuerMismatchMessage(messages, {
+      expectedIssuer,
+      actualIssuer,
+    }));
+  }
 
   const code = url.searchParams.get("code");
   if (!code) {
@@ -345,6 +447,153 @@ export function parseOAuthRedirect(redirectedUrl, expectedState, messages = {}) 
   }
 
   return { code };
+}
+
+function getOAuthIssuerMismatchMessage(messages, details) {
+  if (typeof messages.issuerMismatch == "function") {
+    return messages.issuerMismatch(details);
+  }
+
+  if (messages.issuerMismatch) {
+    return messages.issuerMismatch;
+  }
+
+  return `OAuth response issuer did not match the configured OAuth Issuer URL. Expected ${details.expectedIssuer}, got ${details.actualIssuer || "missing"}. Update OAuth Issuer URL to match the authorization server issuer.`;
+}
+
+async function fetchAuthorizationMetadata(metadataUrl, fetchImpl) {
+  const response = await fetchImpl(metadataUrl, {
+    method: "GET",
+    redirect: "manual",
+  });
+  const contentType = response.headers.get("Content-Type") || "";
+  if (!response.ok || !contentType.toLowerCase().includes("application/json")) {
+    return new Response("", { status: response.status || 0 });
+  }
+
+  return response;
+}
+
+function authorizationServerMetadataUrl(issuer) {
+  const url = new URL(issuer);
+  const path = url.pathname == "/" ? "" : url.pathname;
+  return `${url.origin}/.well-known/oauth-authorization-server${path}`;
+}
+
+function openIdConfigurationUrl(issuer) {
+  return `${issuer}/.well-known/openid-configuration`;
+}
+
+function protectedResourceMetadataUrl(resourceUrl) {
+  const url = new URL(resourceUrl);
+  const path = url.pathname == "/" ? "" : url.pathname;
+  const search = url.search || "";
+  return `${url.origin}/.well-known/oauth-protected-resource${path}${search}`;
+}
+
+function normalizeResourceUrl(resourceUrl) {
+  const url = new URL(resourceUrl);
+  url.hash = "";
+  return url.toString();
+}
+
+function splitHeaderValues(headerValue) {
+  const values = [];
+  let current = "";
+  let quoted = false;
+  let escaped = false;
+
+  for (const character of headerValue) {
+    if (escaped) {
+      current += character;
+      escaped = false;
+      continue;
+    }
+
+    if (character == "\\") {
+      current += character;
+      escaped = quoted;
+      continue;
+    }
+
+    if (character == "\"") {
+      quoted = !quoted;
+      current += character;
+      continue;
+    }
+
+    if (character == "," && !quoted) {
+      values.push(current);
+      current = "";
+      continue;
+    }
+
+    current += character;
+  }
+
+  if (current) {
+    values.push(current);
+  }
+
+  return values;
+}
+
+function parseHeaderParameters(value) {
+  const parameters = {};
+  for (const part of splitHeaderValues(value)) {
+    const separatorIndex = part.indexOf("=");
+    if (separatorIndex == -1) {
+      continue;
+    }
+
+    const name = part.slice(0, separatorIndex).trim();
+    const rawValue = part.slice(separatorIndex + 1).trim();
+    if (!name) {
+      continue;
+    }
+
+    parameters[name] = unquoteHeaderValue(rawValue);
+  }
+
+  return parameters;
+}
+
+function normalizeOAuthEndpoints(endpoints) {
+  return {
+    ...endpoints,
+    scopesSupported: endpoints.scopesSupported || [],
+  };
+}
+
+function oauthMetadataError(message, oauthEndpoints) {
+  const error = new Error(message);
+  error.details = { oauthEndpoints };
+  return error;
+}
+
+function unquoteHeaderValue(value) {
+  if (!value.startsWith("\"") || !value.endsWith("\"")) {
+    return value;
+  }
+
+  let result = "";
+  let escaped = false;
+  for (const character of value.slice(1, -1)) {
+    if (escaped) {
+      result += character;
+      escaped = false;
+      continue;
+    }
+
+    if (character == "\\") {
+      escaped = true;
+      continue;
+    }
+
+    result += character;
+  }
+
+  return result;
 }
 
 async function postTokenRequest(tokenUrl, body, { signal = null } = {}) {
@@ -393,5 +642,9 @@ function base64UrlEncode(bytes) {
 
 function normalizeIssuer(issuerUrl) {
   const url = new URL(issuerUrl);
-  return url.origin;
+  if (url.protocol != "https:" || url.search || url.hash) {
+    throw new Error("OAuth issuer URL must be an HTTPS URL without query or fragment.");
+  }
+  const path = url.pathname.replace(/\/$/, "");
+  return path ? `${url.origin}${path}` : url.origin;
 }

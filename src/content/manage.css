@@ -285,25 +285,50 @@ input:disabled {
 }
 
 .form-grid {
-  display: grid;
-  grid-template-columns: 190px minmax(220px, 720px);
-  gap: 12px 14px;
-  align-items: center;
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
 }
 
-.form-grid label {
+.setting-row {
+  display: grid;
+  grid-template-columns: 190px minmax(220px, 720px);
+  gap: 14px;
+  align-items: start;
+}
+
+.setting-row[hidden] {
+  display: none;
+}
+
+.setting-row > label {
+  padding-block-start: 7px;
   text-align: end;
 }
 
-.form-grid input,
+.form-grid input:not([type="radio"]),
 .form-grid select,
 .editor-name-input {
+  width: 100%;
   min-height: 32px;
   padding: 4px 8px;
   border: 1px solid var(--border-color);
   border-radius: 3px;
   background: Field;
   color: FieldText;
+}
+
+.field-control {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.field-description {
+  margin: 0;
+  color: var(--muted-color);
+  line-height: 1.35;
 }
 
 .radio-row {
@@ -426,11 +451,11 @@ input:disabled {
     padding: 22px;
   }
 
-  .form-grid {
+  .setting-row {
     grid-template-columns: 1fr;
   }
 
-  .form-grid label,
+  .setting-row > label,
   .form-grid .full-row {
     grid-column: 1;
     text-align: start;

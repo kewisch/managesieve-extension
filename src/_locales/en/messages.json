@@ -35,6 +35,30 @@
   "testManualServer": {
     "message": "Test and Add"
   },
+  "continueSetup": {
+    "message": "Continue"
+  },
+  "advancedSettings": {
+    "message": "Advanced Settings"
+  },
+  "autodetectingServer": {
+    "message": "Detecting server settings..."
+  },
+  "addServerAutodetectHint": {
+    "message": "Enter the server name and address. Manage Sieve will try JMAP first, then ask for credentials if TCP ManageSieve is needed."
+  },
+  "configureAutodetectHint": {
+    "message": "Enter the server address. Manage Sieve will detect the safest available connection settings."
+  },
+  "tcpCredentialsHint": {
+    "message": "JMAP was not available. Enter the ManageSieve user name and password to try TCP autodetection."
+  },
+  "serverAddressRequired": {
+    "message": "Enter a server address to continue."
+  },
+  "tcpCredentialsRequired": {
+    "message": "Enter a user name and password to continue."
+  },
   "addServerTitle": {
     "message": "Add Sieve Server"
   },
@@ -56,6 +80,9 @@
   "displayNameLabel": {
     "message": "Display Name:"
   },
+  "displayNameDescription": {
+    "message": "The name shown in the Manage Sieve sidebar."
+  },
   "displayNamePlaceholder": {
     "message": "External Sieve Server"
   },
@@ -70,6 +97,9 @@
   "serverTypeLabel": {
     "message": "Server Type:"
   },
+  "serverTypeDescription": {
+    "message": "JMAP uses HTTPS and OAuth. TCP ManageSieve connects directly to port 4190."
+  },
   "serverTypeJmap": {
     "message": "JMAP"
   },
@@ -79,17 +109,26 @@
   "serverAddressLabel": {
     "message": "Server Address:"
   },
+  "serverAddressDescription": {
+    "message": "A host name or full JMAP session URL. Host names use the JMAP well-known URL by default."
+  },
   "serverAddressPlaceholder": {
     "message": "mail.example.com"
   },
   "tcpPortLabel": {
     "message": "Port:"
   },
+  "tcpPortDescription": {
+    "message": "The TCP ManageSieve port. The standard default is 4190."
+  },
   "tcpPortPlaceholder": {
     "message": "4190"
   },
   "tcpSecurityLabel": {
     "message": "Security:"
+  },
+  "tcpSecurityDescription": {
+    "message": "TLS connects securely immediately. STARTTLS upgrades to TLS after connecting."
   },
   "tcpSecurityStartTls": {
     "message": "STARTTLS"
@@ -99,6 +138,9 @@
   },
   "authTypeLabel": {
     "message": "Authentication:"
+  },
+  "authTypeDescription": {
+    "message": "How the JMAP server authenticates requests."
   },
   "authBearer": {
     "message": "Bearer token"
@@ -112,14 +154,26 @@
   "tokenLabel": {
     "message": "Token:"
   },
+  "tokenDescription": {
+    "message": "A bearer token for JMAP requests."
+  },
   "usernameLabel": {
     "message": "User name:"
+  },
+  "usernameDescription": {
+    "message": "The login name used for Basic authentication or TCP ManageSieve."
   },
   "passwordLabel": {
     "message": "Password:"
   },
+  "passwordDescription": {
+    "message": "The password or app password for the selected user name."
+  },
   "oauthIssuerUrlLabel": {
     "message": "OAuth Issuer URL:"
+  },
+  "oauthIssuerUrlDescription": {
+    "message": "The OAuth authorization server issuer used to discover login endpoints."
   },
   "oauthIssuerUrlPlaceholder": {
     "message": "https://auth.example.com"
@@ -127,11 +181,17 @@
   "oauthAuthorizationUrlLabel": {
     "message": "OAuth Authorization URL:"
   },
+  "oauthAuthorizationUrlDescription": {
+    "message": "The endpoint opened in a login window to authorize Manage Sieve."
+  },
   "oauthAuthorizationUrlPlaceholder": {
     "message": "https://auth.example.com/oauth/authorize"
   },
   "oauthTokenUrlLabel": {
     "message": "OAuth Token URL:"
+  },
+  "oauthTokenUrlDescription": {
+    "message": "The endpoint used to exchange and refresh OAuth access tokens."
   },
   "oauthTokenUrlPlaceholder": {
     "message": "https://auth.example.com/oauth/token"
@@ -139,8 +199,14 @@
   "oauthClientIdLabel": {
     "message": "OAuth Client ID:"
   },
+  "oauthClientIdDescription": {
+    "message": "The public OAuth client identifier. The default is open."
+  },
   "oauthScopeLabel": {
     "message": "OAuth Scopes:"
+  },
+  "oauthScopeDescription": {
+    "message": "The OAuth permissions requested for JMAP Sieve access."
   },
   "oauthMissingEndpointConfiguration": {
     "message": "OAuth issuer URL or manual authorization and token URLs are required."
@@ -153,6 +219,20 @@
   },
   "oauthStateMismatch": {
     "message": "The OAuth response did not match the request state."
+  },
+  "oauthIssuerMismatch": {
+    "message": "OAuth response issuer did not match the configured OAuth Issuer URL. Expected $EXPECTED$, got $ACTUAL$. Update OAuth Issuer URL to match the authorization server issuer.",
+    "placeholders": {
+      "expected": {
+        "content": "$1"
+      },
+      "actual": {
+        "content": "$2"
+      }
+    }
+  },
+  "oauthIssuerMissing": {
+    "message": "missing"
   },
   "oauthMissingCode": {
     "message": "The OAuth response did not include an authorization code."
@@ -176,9 +256,6 @@
         "content": "$1"
       }
     }
-  },
-  "hostPermissionDenied": {
-    "message": "Host permission was not granted for the configured server."
   },
   "connectionSuccessful": {
     "message": "Connection successful"

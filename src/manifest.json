@@ -27,9 +27,7 @@
   ],
   "host_permissions": [
     "http://localhost/*",
-    "https://localhost/*"
-  ],
-  "optional_permissions": [
+    "https://localhost/*",
     "https://*/*"
   ],
   "experiment_apis": {

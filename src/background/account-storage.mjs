@@ -28,12 +28,11 @@ export class AccountStorage {
       oauthAuthorizationUrl: "",
       oauthClientId: "open",
       oauthTokenUrl: "",
-      oauthRegistrationUrl: "",
       oauthScope: "",
       oauthRefreshToken: "",
       oauthExpiresAt: null,
       tcpPort: 4190,
-      tcpSecurity: "starttls",
+      tcpSecurity: "tls",
       ...config,
     };
     await this.storageArea.set({ accountConfigs: configs });

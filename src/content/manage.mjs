@@ -1,4 +1,5 @@
 import {
+  bindDefaultFormSubmit,
   buildSidebarModel,
   canCreateScript,
   canSaveScript,
@@ -8,21 +9,21 @@ import {
   getButtonLabelIds,
   getConfigureActionIds,
   getDeleteDialogModel,
-  getDiscoveryOrigin,
   getEmptyEditorState,
   getEditorActionIds,
   getLoadedEditorState,
   getServerIconPath,
   getServerTypeOptions,
+  getSetupMode,
+  getSimpleSetupModel,
   getSidebarItemIcon,
   getInitialSelection,
   getDefaultServerAddress,
   getSelectedView,
-  getTcpPermissionOrigin,
   getTcpSecurityOptions,
-  getVisibleConfigFieldIds,
   hasActiveScriptAfterRefresh,
   isScriptActiveAfterRefresh,
+  shouldRetryJmapAutodetection,
   visibleAccounts,
 } from "./app-state.mjs";
 import {
@@ -36,6 +37,10 @@ const state = {
   scriptsByAccount: {},
   selected: null,
   editor: getEmptyEditorState(),
+  setupModes: {},
+  setupDrafts: {},
+  setupErrors: {},
+  isDetecting: false,
 };
 let statusFadeTimer = null;
 let autoValidationTimer = null;
@@ -226,30 +231,46 @@ async function loadScript(accountId, scriptId) {
 }
 
 function renderConfigureView(accountId) {
-  const account = getAccount(accountId);
-  const config = state.configs[accountId] || {};
-  const rows = [];
-  if (account?.type == "manual") {
-    rows.push(["displayNameLabel", input("displayName", config.displayName || account.name || "")]);
+  const mode = getSetupMode(
+    accountId,
+    state.setupModes,
+    state.configs[accountId] ? "advanced" : "simple"
+  );
+  if (mode == "advanced") {
+    renderAdvancedConfigureView(accountId);
+    return;
   }
+  if (mode == "tcpCredentials") {
+    renderTcpCredentialsView(accountId);
+    return;
+  }
+
+  renderSimpleSetupView(accountId);
+}
+
+function renderAdvancedConfigureView(accountId) {
+  const account = getAccount(accountId);
+  const config = getDraftConfig(accountId, state.configs[accountId] || {});
+  const rows = [];
+  rows.push(["displayNameLabel", input("displayName", config.displayName || account?.name || "")]);
   rows.push(
     ["serverTypeLabel", radioGroup("provider", getServerTypeOptions(), config.provider || "jmap")],
     ["serverAddressLabel", input("sessionUrl", config.sessionUrl || getDefaultServerAddress(account), message("serverAddressPlaceholder"))],
     ["tcpPortLabel", input("tcpPort", config.tcpPort || "4190", message("tcpPortPlaceholder"), "number"), ["tcp"]],
-    ["tcpSecurityLabel", select("tcpSecurity", config.tcpSecurity || "starttls", getTcpSecurityOptions()), ["tcp"]],
+    ["tcpSecurityLabel", select("tcpSecurity", config.tcpSecurity || "tls", getTcpSecurityOptions()), ["tcp"]],
     ["authTypeLabel", select("authType", config.authType || "bearer", [
       ["bearer", "authBearer"],
       ["basic", "authBasic"],
       ["oauth", "authOAuth"],
     ]), ["jmap"]],
-    ["tokenLabel", input("token", config.token || "", "", "password"), ["bearer"]],
-    ["usernameLabel", input("username", config.username || ""), ["basic"]],
-    ["passwordLabel", input("password", config.password || "", "", "password"), ["basic"]],
-    ["oauthIssuerUrlLabel", input("oauthIssuerUrl", config.oauthIssuerUrl || "", message("oauthIssuerUrlPlaceholder")), ["oauth"]],
-    ["oauthAuthorizationUrlLabel", input("oauthAuthorizationUrl", config.oauthAuthorizationUrl || "", message("oauthAuthorizationUrlPlaceholder")), ["oauth"]],
-    ["oauthTokenUrlLabel", input("oauthTokenUrl", config.oauthTokenUrl || "", message("oauthTokenUrlPlaceholder")), ["oauth"]],
-    ["oauthClientIdLabel", input("oauthClientId", config.oauthClientId || "open"), ["oauth"]],
-    ["oauthScopeLabel", input("oauthScope", config.oauthScope || DEFAULT_OAUTH_SCOPE), ["oauth"]],
+    ["tokenLabel", input("token", config.token || "", "", "password"), ["jmap", "bearer"]],
+    ["usernameLabel", input("username", config.username || ""), ["jmap", "basic", "tcp"]],
+    ["passwordLabel", input("password", config.password || "", "", "password"), ["jmap", "basic", "tcp"]],
+    ["oauthIssuerUrlLabel", input("oauthIssuerUrl", config.oauthIssuerUrl || "", message("oauthIssuerUrlPlaceholder")), ["jmap", "oauth"]],
+    ["oauthAuthorizationUrlLabel", input("oauthAuthorizationUrl", config.oauthAuthorizationUrl || "", message("oauthAuthorizationUrlPlaceholder")), ["jmap", "oauth"]],
+    ["oauthTokenUrlLabel", input("oauthTokenUrl", config.oauthTokenUrl || "", message("oauthTokenUrlPlaceholder")), ["jmap", "oauth"]],
+    ["oauthClientIdLabel", input("oauthClientId", config.oauthClientId || "open"), ["jmap", "oauth"]],
+    ["oauthScopeLabel", input("oauthScope", config.oauthScope || DEFAULT_OAUTH_SCOPE), ["jmap", "oauth"]],
     ["", buttonRow(getConfigureActionIds(account).map(actionId => button(
       actionId,
       actionId == "testConnection" ? "primary" : actionId == "removeManualServer" ? "danger" : "",
@@ -258,33 +279,49 @@ function renderConfigureView(accountId) {
   );
   contentArea.replaceChildren(
     header(message("configureTitle", [account?.name || accountId]), []),
-    formRowset(rows)
+    formRowset(rows, () => saveAndTestConfiguration(accountId))
   );
   bindAuthFieldVisibility();
+  showSetupError(accountId);
 }
 
 function renderAddManualServerView() {
+  const mode = getSetupMode("addManualServer", state.setupModes);
+  if (mode == "advanced") {
+    renderAdvancedAddManualServerView();
+    return;
+  }
+  if (mode == "tcpCredentials") {
+    renderTcpCredentialsView(null);
+    return;
+  }
+
+  renderSimpleSetupView(null);
+}
+
+function renderAdvancedAddManualServerView() {
+  const config = getDraftConfig(null, {});
   contentArea.replaceChildren(
     header(message("addServerTitle"), []),
     formRowset([
-      ["displayNameLabel", input("displayName", "", message("displayNamePlaceholder"))],
-      ["serverTypeLabel", radioGroup("provider", getServerTypeOptions(), "jmap")],
-      ["serverAddressLabel", input("sessionUrl", "", message("serverAddressPlaceholder"))],
-      ["tcpPortLabel", input("tcpPort", "4190", message("tcpPortPlaceholder"), "number"), ["tcp"]],
-      ["tcpSecurityLabel", select("tcpSecurity", "starttls", getTcpSecurityOptions()), ["tcp"]],
-      ["authTypeLabel", select("authType", "bearer", [
+      ["displayNameLabel", input("displayName", config.displayName || "", message("displayNamePlaceholder"))],
+      ["serverTypeLabel", radioGroup("provider", getServerTypeOptions(), config.provider || "jmap")],
+      ["serverAddressLabel", input("sessionUrl", config.sessionUrl || "", message("serverAddressPlaceholder"))],
+      ["tcpPortLabel", input("tcpPort", config.tcpPort || "4190", message("tcpPortPlaceholder"), "number"), ["tcp"]],
+      ["tcpSecurityLabel", select("tcpSecurity", config.tcpSecurity || "tls", getTcpSecurityOptions()), ["tcp"]],
+      ["authTypeLabel", select("authType", config.authType || "bearer", [
         ["bearer", "authBearer"],
         ["basic", "authBasic"],
         ["oauth", "authOAuth"],
       ]), ["jmap"]],
-      ["tokenLabel", input("token", "", "", "password"), ["bearer"]],
-      ["usernameLabel", input("username", ""), ["basic"]],
-      ["passwordLabel", input("password", "", "", "password"), ["basic"]],
-      ["oauthIssuerUrlLabel", input("oauthIssuerUrl", "", message("oauthIssuerUrlPlaceholder")), ["oauth"]],
-      ["oauthAuthorizationUrlLabel", input("oauthAuthorizationUrl", "", message("oauthAuthorizationUrlPlaceholder")), ["oauth"]],
-      ["oauthTokenUrlLabel", input("oauthTokenUrl", "", message("oauthTokenUrlPlaceholder")), ["oauth"]],
-      ["oauthClientIdLabel", input("oauthClientId", "open"), ["oauth"]],
-      ["oauthScopeLabel", input("oauthScope", DEFAULT_OAUTH_SCOPE), ["oauth"]],
+      ["tokenLabel", input("token", config.token || "", "", "password"), ["jmap", "bearer"]],
+      ["usernameLabel", input("username", config.username || ""), ["jmap", "basic", "tcp"]],
+      ["passwordLabel", input("password", config.password || "", "", "password"), ["jmap", "basic", "tcp"]],
+      ["oauthIssuerUrlLabel", input("oauthIssuerUrl", config.oauthIssuerUrl || "", message("oauthIssuerUrlPlaceholder")), ["jmap", "oauth"]],
+      ["oauthAuthorizationUrlLabel", input("oauthAuthorizationUrl", config.oauthAuthorizationUrl || "", message("oauthAuthorizationUrlPlaceholder")), ["jmap", "oauth"]],
+      ["oauthTokenUrlLabel", input("oauthTokenUrl", config.oauthTokenUrl || "", message("oauthTokenUrlPlaceholder")), ["jmap", "oauth"]],
+      ["oauthClientIdLabel", input("oauthClientId", config.oauthClientId || "open"), ["jmap", "oauth"]],
+      ["oauthScopeLabel", input("oauthScope", config.oauthScope || DEFAULT_OAUTH_SCOPE), ["jmap", "oauth"]],
       ["", buttonRow(getAddManualServerActionIds().map(actionId => {
         if (actionId == "saveManualServer") {
           return button(actionId, "primary", () => saveManualConnection());
@@ -292,19 +329,255 @@ function renderAddManualServerView() {
 
         return button(actionId, "", () => createManualConnection());
       }))],
-    ]),
+    ], () => createManualConnection()),
     paragraph("hint", message("addServerHint"))
   );
   bindAuthFieldVisibility();
+  showSetupError(null);
+}
+
+function renderSimpleSetupView(accountId) {
+  const account = accountId ? getAccount(accountId) : null;
+  const model = getSimpleSetupModel({
+    account,
+    config: getDraftConfig(accountId, state.configs[accountId] || {}),
+  });
+  const continueButton = button("continueSetup", "primary", null, { type: "submit" });
+  const advancedButton = button("advancedSettings", "", () => openAdvancedSettings(accountId));
+  continueButton.disabled = state.isDetecting;
+  advancedButton.disabled = state.isDetecting;
+
+  contentArea.replaceChildren(
+    header(accountId ? message("configureTitle", [account?.name || accountId]) : message("addServerTitle"), []),
+    formRowset([
+      ["displayNameLabel", input("displayName", model.displayName, message("displayNamePlaceholder"))],
+      ["serverAddressLabel", input("sessionUrl", model.serverAddress, model.serverAddressPlaceholder)],
+      ["", buttonRow([continueButton, advancedButton])],
+    ], () => startAutodetection(accountId)),
+    paragraph("hint", message(accountId ? "configureAutodetectHint" : "addServerAutodetectHint"))
+  );
+  if (state.isDetecting) {
+    showStatus(message("autodetectingServer"));
+  }
+  showSetupError(accountId);
+}
+
+function renderTcpCredentialsView(accountId) {
+  const account = accountId ? getAccount(accountId) : null;
+  const config = getDraftConfig(accountId, state.configs[accountId] || {});
+  const continueButton = button("continueSetup", "primary", null, { type: "submit" });
+  const advancedButton = button("advancedSettings", "", () => openAdvancedSettings(accountId));
+  continueButton.disabled = state.isDetecting;
+  advancedButton.disabled = state.isDetecting;
+
+  contentArea.replaceChildren(
+    header(accountId ? message("configureTitle", [account?.name || accountId]) : message("addServerTitle"), []),
+    formRowset([
+      ["displayNameLabel", input("displayName", config.displayName || account?.name || "", message("displayNamePlaceholder"))],
+      ["serverAddressLabel", input("sessionUrl", config.sessionUrl || getDefaultServerAddress(account), message("serverAddressPlaceholder"))],
+      ["usernameLabel", input("username", config.username || "")],
+      ["passwordLabel", input("password", config.password || "", "", "password")],
+      ["", buttonRow([continueButton, advancedButton])],
+    ], () => continueTcpAutodetection(accountId)),
+    paragraph("hint", message("tcpCredentialsHint"))
+  );
+  if (state.isDetecting) {
+    showStatus(message("autodetectingServer"));
+  }
+  showSetupError(accountId);
+}
+
+async function startAutodetection(accountId) {
+  const simpleConfig = readSimpleSetupForm(accountId);
+  const key = setupKey(accountId);
+  let successMessage = "";
+  state.setupDrafts[key] = simpleConfig;
+  state.setupErrors[key] = null;
+
+  if (!simpleConfig.sessionUrl) {
+    state.setupErrors[key] = { message: message("serverAddressRequired") };
+    render();
+    return;
+  }
+
+  state.isDetecting = true;
+  render();
+  try {
+    const discovery = await sendMessage({
+      type: "managesieve.discoverJmapOAuthConfig",
+      accountId,
+      serverAddress: simpleConfig.sessionUrl,
+    });
+    if (!discovery.ok) {
+      openAdvancedSettings(accountId, {
+        ...simpleConfig,
+        provider: "jmap",
+        authType: "oauth",
+        ...(discovery.error?.details?.config || {}),
+      }, discovery.error);
+      return;
+    }
+
+    if (discovery.result.config?.provider == "tcp") {
+      state.setupDrafts[key] = {
+        ...simpleConfig,
+        ...discovery.result.config,
+      };
+      state.setupModes[key] = "tcpCredentials";
+      return;
+    }
+
+    if (!discovery.result.available) {
+      state.setupDrafts[key] = {
+        ...simpleConfig,
+        provider: "tcp",
+        authType: "basic",
+        tcpPort: 4190,
+        tcpSecurity: "tls",
+      };
+      state.setupModes[key] = "tcpCredentials";
+      return;
+    }
+
+    let config = {
+      ...simpleConfig,
+      ...discovery.result.config,
+    };
+    state.setupDrafts[key] = config;
+    config = await authorizeOAuth(config);
+    await saveDetectedConfig(accountId, config);
+    successMessage = message("connectionSuccessful");
+  } catch (error) {
+    openAdvancedSettings(accountId, getDraftConfig(accountId, simpleConfig), error);
+  } finally {
+    state.isDetecting = false;
+    render();
+    if (successMessage) {
+      showStatus(successMessage);
+    }
+  }
+}
+
+async function continueTcpAutodetection(accountId) {
+  const key = setupKey(accountId);
+  let successMessage = "";
+  const config = {
+    ...getDraftConfig(accountId),
+    displayName: document.getElementById("displayName")?.value.trim() || "",
+    sessionUrl: document.getElementById("sessionUrl")?.value.trim() || "",
+    username: document.getElementById("username")?.value || "",
+    password: document.getElementById("password")?.value || "",
+    provider: "tcp",
+    authType: "basic",
+    tcpPort: Number(getDraftConfig(accountId).tcpPort || 4190),
+    tcpSecurity: getDraftConfig(accountId).tcpSecurity || "tls",
+  };
+  state.setupDrafts[key] = config;
+  state.setupErrors[key] = null;
+
+  if (!config.username || !config.password) {
+    state.setupErrors[key] = { message: message("tcpCredentialsRequired") };
+    render();
+    return;
+  }
+
+  state.isDetecting = true;
+  render();
+  try {
+    const response = await sendMessage({
+      type: "managesieve.probeTcpAutoconfig",
+      config,
+    });
+    if (!response.ok) {
+      openAdvancedSettings(accountId, config, response.error);
+      return;
+    }
+
+    await saveDetectedConfig(accountId, {
+      ...config,
+      ...response.result.config,
+    });
+    successMessage = message("connectionSuccessful");
+  } catch (error) {
+    openAdvancedSettings(accountId, getDraftConfig(accountId, config), error);
+  } finally {
+    state.isDetecting = false;
+    render();
+    if (successMessage) {
+      showStatus(successMessage);
+    }
+  }
+}
+
+async function saveDetectedConfig(accountId, config) {
+  if (accountId) {
+    const response = await sendMessage({
+      type: "managesieve.saveDetectedConfig",
+      accountId,
+      config,
+    });
+    if (!response.ok) {
+      throw response.error;
+    }
+
+    state.configs[accountId] = response.config || config;
+    updateAccountName(accountId, config.displayName);
+    state.scriptsByAccount[accountId] = response.scripts || [];
+    state.setupModes[accountId] = "advanced";
+    state.setupDrafts[accountId] = null;
+    state.selected = { accountId, type: "configure" };
+    return;
+  }
+
+  const response = await sendMessage({
+    type: "managesieve.createManualConnection",
+    config,
+  });
+  if (!response.ok) {
+    throw response.error;
+  }
+
+  state.accounts = [...state.accounts, response.account];
+  state.configs[response.account.id] = response.config;
+  state.scriptsByAccount[response.account.id] = response.scripts || [];
+  state.setupModes.addManualServer = "simple";
+  state.setupDrafts.addManualServer = null;
+  state.selected = { accountId: response.account.id, type: "configure" };
+}
+
+function openAdvancedSettings(accountId, config = getDraftConfig(accountId), error = null) {
+  const key = setupKey(accountId);
+  state.setupModes[key] = "advanced";
+  state.setupDrafts[key] = config;
+  state.setupErrors[key] = error;
+  render();
+}
+
+function readSimpleSetupForm(accountId) {
+  return {
+    ...getDraftConfig(accountId),
+    displayName: document.getElementById("displayName")?.value.trim() || "",
+    sessionUrl: document.getElementById("sessionUrl")?.value.trim() || "",
+  };
+}
+
+function getDraftConfig(accountId, fallback = {}) {
+  return state.setupDrafts[setupKey(accountId)] || fallback || {};
+}
+
+function setupKey(accountId) {
+  return accountId || "addManualServer";
+}
+
+function showSetupError(accountId) {
+  const error = state.setupErrors[setupKey(accountId)];
+  if (error) {
+    showInlineError(error);
+  }
 }
 
 async function saveConfiguration(accountId) {
   const config = readConfigForm();
-  if (config.provider == "tcp" && !await requestHostPermission(accountId)) {
-    showInlineError({ message: message("hostPermissionDenied") });
-    return false;
-  }
-
   const response = await sendMessage({
     type: "managesieve.saveConfig",
     accountId,
@@ -327,12 +600,15 @@ async function saveAndTestConfiguration(accountId) {
   let response = null;
   let config = null;
   try {
-    if (!await requestHostPermission(accountId)) {
-      showInlineError({ message: message("hostPermissionDenied") });
-      return;
+    config = readConfigForm();
+    if (shouldRetryJmapAutodetection({
+      error: state.setupErrors[setupKey(accountId)],
+      previousConfig: getDraftConfig(accountId),
+      currentConfig: config,
+    })) {
+      return startAutodetection(accountId);
     }
 
-    config = readConfigForm();
     if (config.authType == "oauth") {
       config = await authorizeOAuth(config);
     }
@@ -362,12 +638,15 @@ async function saveAndTestConfiguration(accountId) {
 async function createManualConnection() {
   let response = null;
   try {
-    if (!await requestHostPermission(null)) {
-      showInlineError({ message: message("hostPermissionDenied") });
-      return;
+    let config = readConfigForm();
+    if (shouldRetryJmapAutodetection({
+      error: state.setupErrors[setupKey(null)],
+      previousConfig: getDraftConfig(null),
+      currentConfig: config,
+    })) {
+      return startAutodetection(null);
     }
 
-    let config = readConfigForm();
     if (config.authType == "oauth") {
       config = await authorizeOAuth(config);
     }
@@ -395,11 +674,6 @@ async function createManualConnection() {
 
 async function saveManualConnection() {
   const config = readConfigForm();
-  if (config.provider == "tcp" && !await requestHostPermission(null)) {
-    showInlineError({ message: message("hostPermissionDenied") });
-    return;
-  }
-
   const response = await sendMessage({
     type: "managesieve.saveManualConnection",
     config,
@@ -981,37 +1255,10 @@ function readConfigForm() {
     oauthAuthorizationUrl: document.getElementById("oauthAuthorizationUrl")?.value.trim() || "",
     oauthClientId: normalizeClientId(document.getElementById("oauthClientId")?.value),
     oauthTokenUrl: document.getElementById("oauthTokenUrl")?.value.trim() || "",
-    oauthRegistrationUrl: "",
     oauthScope: document.getElementById("oauthScope")?.value.trim() || DEFAULT_OAUTH_SCOPE,
     tcpPort: Number(document.getElementById("tcpPort")?.value || 4190),
-    tcpSecurity: document.getElementById("tcpSecurity")?.value || "starttls",
+    tcpSecurity: document.getElementById("tcpSecurity")?.value || "tls",
   };
-}
-
-async function requestHostPermission(accountId) {
-  const config = readConfigForm();
-  const origins = new Set();
-  const sessionOrigin = config.provider == "tcp" ?
-    getTcpPermissionOrigin(config.sessionUrl) :
-    getDiscoveryOrigin(config.sessionUrl, accountId ? getAccount(accountId) : null);
-  if (sessionOrigin) {
-    origins.add(sessionOrigin);
-  }
-  if (config.authType == "oauth" && config.oauthIssuerUrl) {
-    origins.add(`${new URL(config.oauthIssuerUrl).origin}/*`);
-  }
-  if (config.authType == "oauth" && config.oauthAuthorizationUrl) {
-    origins.add(`${new URL(config.oauthAuthorizationUrl).origin}/*`);
-  }
-  if (config.authType == "oauth" && config.oauthTokenUrl) {
-    origins.add(`${new URL(config.oauthTokenUrl).origin}/*`);
-  }
-
-  if (!origins.size) {
-    return true;
-  }
-
-  return messenger.permissions.request({ origins: [...origins] });
 }
 
 async function authorizeOAuth(config) {
@@ -1039,39 +1286,76 @@ function header(title, actions = []) {
   return container;
 }
 
-function formRowset(rows) {
-  const form = document.createElement("div");
+function formRowset(rows, defaultSubmitHandler = null) {
+  const form = document.createElement(defaultSubmitHandler ? "form" : "div");
   form.className = "form-grid";
+  if (defaultSubmitHandler) {
+    bindDefaultFormSubmit(form, defaultSubmitHandler);
+  }
 
-  for (const [labelId, control, authTypes = null] of rows) {
+  for (const [labelId, control, visibilityTokens = null] of rows) {
+    const row = document.createElement("div");
+    row.className = "setting-row";
     if (labelId) {
       const label = document.createElement("label");
       label.textContent = message(labelId);
       label.htmlFor = control.id;
-      setAuthVisibilityMetadata(label, control.id, authTypes);
-      setAuthVisibilityMetadata(control, control.id, authTypes);
-      form.append(label, control);
+      const field = document.createElement("div");
+      field.className = "field-control";
+      field.append(control);
+      const descriptionId = getFieldDescriptionId(control.id);
+      if (descriptionId) {
+        field.append(paragraph("field-description", message(descriptionId)));
+      }
+      setFieldVisibilityMetadata(row, visibilityTokens);
+      row.append(label, field);
+      form.append(row);
     } else {
       const spacer = document.createElement("div");
       const fullRow = document.createElement("div");
       fullRow.className = "full-row";
-      setAuthVisibilityMetadata(spacer, control.id, authTypes);
-      setAuthVisibilityMetadata(fullRow, control.id, authTypes);
+      setFieldVisibilityMetadata(row, visibilityTokens);
       fullRow.append(control);
-      form.append(spacer, fullRow);
+      row.append(spacer, fullRow);
+      form.append(row);
     }
   }
 
   return form;
 }
 
-function setAuthVisibilityMetadata(element, fieldId, authTypes) {
-  if (!authTypes) {
+function getFieldDescriptionId(fieldId) {
+  return {
+    displayName: "displayNameDescription",
+    provider: "serverTypeDescription",
+    sessionUrl: "serverAddressDescription",
+    tcpPort: "tcpPortDescription",
+    tcpSecurity: "tcpSecurityDescription",
+    authType: "authTypeDescription",
+    token: "tokenDescription",
+    username: "usernameDescription",
+    password: "passwordDescription",
+    oauthIssuerUrl: "oauthIssuerUrlDescription",
+    oauthAuthorizationUrl: "oauthAuthorizationUrlDescription",
+    oauthTokenUrl: "oauthTokenUrlDescription",
+    oauthClientId: "oauthClientIdDescription",
+    oauthScope: "oauthScopeDescription",
+  }[fieldId] || "";
+}
+
+function setFieldVisibilityMetadata(element, tokens) {
+  if (!tokens) {
     return;
   }
 
-  element.dataset.authField = fieldId;
-  element.dataset.authTypes = authTypes.join(" ");
+  const providers = tokens.filter(token => token == "jmap" || token == "tcp");
+  const authTypes = tokens.filter(token => token == "bearer" || token == "basic" || token == "oauth");
+  if (providers.length) {
+    element.dataset.visibleProviders = providers.join(" ");
+  }
+  if (authTypes.length) {
+    element.dataset.visibleAuthTypes = authTypes.join(" ");
+  }
 }
 
 function bindAuthFieldVisibility() {
@@ -1093,9 +1377,12 @@ function bindAuthFieldVisibility() {
 }
 
 function updateAuthFieldVisibility(provider, authType) {
-  const visibleFields = getVisibleConfigFieldIds(provider, authType);
-  for (const element of contentArea.querySelectorAll("[data-auth-field]")) {
-    element.hidden = !visibleFields.has(element.dataset.authField);
+  for (const element of contentArea.querySelectorAll("[data-visible-providers], [data-visible-auth-types]")) {
+    const providers = element.dataset.visibleProviders?.split(" ").filter(Boolean) || [];
+    const authTypes = element.dataset.visibleAuthTypes?.split(" ").filter(Boolean) || [];
+    const providerVisible = !providers.length || providers.includes(provider);
+    const authVisible = provider != "jmap" || !authTypes.length || authTypes.includes(authType);
+    element.hidden = !providerVisible || !authVisible;
   }
 }
 
@@ -1142,9 +1429,9 @@ function radioGroup(name, options, value) {
   return group;
 }
 
-function button(labelId, className, listener) {
+function button(labelId, className, listener, { type = "button" } = {}) {
   const control = document.createElement("button");
-  control.type = "button";
+  control.type = type;
   control.className = className;
   control.dataset.actionId = labelId;
   const labelIds = getButtonLabelIds(labelId);
@@ -1164,7 +1451,9 @@ function button(labelId, className, listener) {
     }
   }
 
-  control.addEventListener("click", listener);
+  if (listener) {
+    control.addEventListener("click", listener);
+  }
   return control;
 }
 

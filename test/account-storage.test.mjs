@@ -51,14 +51,13 @@ test("creates manual server accounts with saved JMAP configuration", async () =>
     oauthAuthorizationUrl: "",
     oauthClientId: "open",
     oauthTokenUrl: "",
-    oauthRegistrationUrl: "",
-      oauthScope: "",
-      oauthRefreshToken: "",
-      oauthExpiresAt: null,
-      tcpPort: 4190,
-      tcpSecurity: "starttls",
-      displayName: "External Sieve",
-    });
+    oauthScope: "",
+    oauthRefreshToken: "",
+    oauthExpiresAt: null,
+    tcpPort: 4190,
+    tcpSecurity: "tls",
+    displayName: "External Sieve",
+  });
 });
 
 test("stores TCP ManageSieve configuration with TCP defaults", async () => {
@@ -75,7 +74,7 @@ test("stores TCP ManageSieve configuration with TCP defaults", async () => {
   assert.equal(config.provider, "tcp");
   assert.equal(config.sessionUrl, "sieve.example.net");
   assert.equal(config.tcpPort, 4190);
-  assert.equal(config.tcpSecurity, "starttls");
+  assert.equal(config.tcpSecurity, "tls");
   assert.equal(config.authType, "basic");
 });
 

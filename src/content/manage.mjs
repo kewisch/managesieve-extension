@@ -122,7 +122,7 @@ function render() {
 
 function renderSidebar() {
   sidebar.replaceChildren();
-  const model = buildSidebarModel(state.accounts, state.scriptsByAccount);
+  const model = buildSidebarModel(state.accounts, state.scriptsByAccount, state.configs);
 
   for (const account of model) {
     const group = document.createElement("section");

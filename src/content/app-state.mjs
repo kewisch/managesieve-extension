@@ -14,7 +14,7 @@ export function bindDefaultFormSubmit(form, submitHandler) {
   });
 }
 
-export function buildSidebarModel(accounts, scriptsByAccount = {}) {
+export function buildSidebarModel(accounts, scriptsByAccount = {}, configs = {}) {
   return visibleAccounts(accounts).map(account => ({
     id: account.id,
     name: account.name || account.id,
@@ -27,11 +27,13 @@ export function buildSidebarModel(accounts, scriptsByAccount = {}) {
         label: script.name || script.id,
         isActive: Boolean(script.isActive),
       })),
-      {
+      // Creating a script needs somewhere to put it, so the entry only shows up
+      // once the account has a connection configured.
+      ...(configs[account.id] ? [{
         type: "new",
         accountId: account.id,
         l10nId: "newScript",
-      },
+      }] : []),
       {
         type: "configure",
         accountId: account.id,

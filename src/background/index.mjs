@@ -143,7 +143,7 @@ async function saveDetectedConfig(accountId, config) {
 }
 
 async function createManualConnection(config) {
-  const provider = config.provider == "tcp" ? providers.tcp : providers.jmap;
+  const provider = getProvider(config);
   let connection = null;
   try {
     connection = await provider.discover(config);
@@ -427,14 +427,21 @@ async function getConnection(accountId, { signal = null } = {}) {
 }
 
 async function getProviderConnection(account, config) {
-  const provider = config.provider == "tcp" ? providers.tcp : providers.jmap;
-  const connection = config.provider == "tcp" ?
-    await provider.discover(config) :
-    await providers.jmap.discover({
-      ...config,
-      thunderbirdAccount: account,
-    });
+  const provider = getProvider(config);
+  const connection = await provider.discover({
+    ...config,
+    thunderbirdAccount: account,
+  });
   return { provider, connection };
+}
+
+function getProvider(config) {
+  const provider = providers[config.provider || "jmap"];
+  if (!provider) {
+    throw new ProviderError("unsupportedProvider", `Unsupported Sieve connection type: ${config.provider}`);
+  }
+
+  return provider;
 }
 
 async function refreshOAuthConfig(accountId, config, { signal = null } = {}) {

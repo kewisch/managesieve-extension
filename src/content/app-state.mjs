@@ -1,5 +1,12 @@
 import { normalizeJmapSessionUrl } from "../background/server-address.mjs";
 
+// The single place a new transport registers itself with the UI. `inlineValidation`
+// marks providers that can validate a script without writing it, which is what the
+// editor gates the save and create buttons on.
+const PROVIDER_CAPABILITIES = {
+  jmap: { inlineValidation: true },
+};
+
 export function bindDefaultFormSubmit(form, submitHandler) {
   form.addEventListener("submit", event => {
     event.preventDefault();
@@ -122,6 +129,14 @@ export function getVisibleAuthFieldIds(authType) {
   }
 
   return ["token"];
+}
+
+export function isSupportedProvider(provider) {
+  return Object.hasOwn(PROVIDER_CAPABILITIES, provider || "jmap");
+}
+
+export function requiresScriptValidation(config) {
+  return PROVIDER_CAPABILITIES[config?.provider || "jmap"]?.inlineValidation ?? false;
 }
 
 export function getServerTypeOptions() {

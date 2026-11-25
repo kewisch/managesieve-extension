@@ -331,20 +331,6 @@ input:disabled {
   line-height: 1.35;
 }
 
-.radio-row {
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  min-height: 32px;
-}
-
-.radio-row label {
-  display: inline-flex;
-  align-items: center;
-  gap: 6px;
-  text-align: start;
-}
-
 .form-grid .full-row {
   grid-column: 2;
 }

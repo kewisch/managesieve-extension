@@ -103,11 +103,6 @@ export function getDiscoveryOrigin(sessionUrl, account) {
   return `https://${domain}/*`;
 }
 
-export function getTcpPermissionOrigin(serverAddress) {
-  const host = getTcpHost(serverAddress);
-  return host ? `https://${host}/*` : null;
-}
-
 export function getDefaultServerAddress(account) {
   const email = account?.identities?.find(identity => identity.email)?.email;
   return email?.split("@").pop() || "";
@@ -139,23 +134,9 @@ export function requiresScriptValidation(config) {
   return PROVIDER_CAPABILITIES[config?.provider || "jmap"]?.inlineValidation ?? false;
 }
 
-export function getServerTypeOptions() {
-  return [
-    { value: "jmap", l10nId: "serverTypeJmap", checked: true },
-    { value: "tcp", l10nId: "serverTypeTcp", checked: false },
-  ];
-}
-
-export function getTcpSecurityOptions() {
-  return [
-    ["tls", "tcpSecurityTls"],
-    ["starttls", "tcpSecurityStartTls"],
-  ];
-}
-
 export function getSetupMode(key, modes = {}, defaultMode = "simple") {
   const mode = modes[key];
-  const setupModes = ["simple", "advanced", "tcpCredentials"];
+  const setupModes = ["simple", "advanced"];
   if (setupModes.includes(mode)) {
     return mode;
   }
@@ -179,32 +160,13 @@ export function shouldRetryJmapAutodetection({
   previousConfig = {},
   currentConfig = {},
 } = {}) {
-  if (!error || previousConfig.provider != "jmap" || currentConfig.provider != "jmap") {
+  if (!error || !isJmapProvider(previousConfig) || !isJmapProvider(currentConfig)) {
     return false;
   }
 
   const previousSessionUrl = normalizeJmapSessionUrl(previousConfig.sessionUrl);
   const currentSessionUrl = normalizeJmapSessionUrl(currentConfig.sessionUrl);
   return Boolean(previousSessionUrl && currentSessionUrl && previousSessionUrl != currentSessionUrl);
-}
-
-export function getVisibleConfigFieldIds(provider, authType) {
-  const fieldIds = new Set(["sessionUrl"]);
-
-  if (provider == "tcp") {
-    fieldIds.add("tcpPort");
-    fieldIds.add("tcpSecurity");
-    fieldIds.add("username");
-    fieldIds.add("password");
-    return fieldIds;
-  }
-
-  fieldIds.add("authType");
-  for (const fieldId of getVisibleAuthFieldIds(authType)) {
-    fieldIds.add(fieldId);
-  }
-
-  return fieldIds;
 }
 
 export function getAddManualServerActionIds() {
@@ -333,15 +295,6 @@ export function visibleAccounts(accounts) {
   return accounts.filter(account => visibleTypes.has(account.type));
 }
 
-function getTcpHost(serverAddress) {
-  const trimmedAddress = serverAddress?.trim() || "";
-  if (!trimmedAddress) {
-    return "";
-  }
-
-  if (/^[a-z][a-z\d+.-]*:\/\//i.test(trimmedAddress)) {
-    return new URL(trimmedAddress).hostname;
-  }
-
-  return trimmedAddress.replace(/\/.*$/, "").replace(/:\d+$/, "");
+function isJmapProvider(config) {
+  return (config?.provider || "jmap") == "jmap";
 }

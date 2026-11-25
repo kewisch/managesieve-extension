@@ -4,9 +4,7 @@ import test from "node:test";
 import {
   discoverJmapAutoconfig,
   findHardcodedServerConfig,
-  probeTcpAutoconfig,
 } from "../src/background/autoconfig.mjs";
-import { ProviderError } from "../src/background/provider-error.mjs";
 
 function jsonResponse(body, init = {}) {
   return new Response(JSON.stringify(body), {
@@ -219,40 +217,4 @@ test("JMAP autoconfig includes discovered OAuth endpoints when metadata validati
       return true;
     }
   );
-});
-
-test("TCP autoconfig probes implicit TLS before STARTTLS", async () => {
-  const attempts = [];
-  const provider = {
-    async discover(config) {
-      attempts.push(config.tcpSecurity);
-      if (config.tcpSecurity == "tls") {
-        throw new ProviderError("tcpConnectFailed", "TLS failed.");
-      }
-      return { socketId: "socket-1" };
-    },
-    async listScripts() {
-      return {
-        scripts: [{ id: "main", name: "main", isActive: true }],
-      };
-    },
-    async closeConnection(connection) {
-      attempts.push(`close:${connection.socketId}`);
-    },
-  };
-
-  const result = await probeTcpAutoconfig({
-    provider,
-    config: {
-      sessionUrl: "sieve.example.net",
-      username: "user",
-      password: "pass",
-    },
-  });
-
-  assert.deepEqual(attempts, ["tls", "starttls", "close:socket-1"]);
-  assert.equal(result.config.provider, "tcp");
-  assert.equal(result.config.tcpPort, 4190);
-  assert.equal(result.config.tcpSecurity, "starttls");
-  assert.deepEqual(result.scripts, [{ id: "main", name: "main", isActive: true }]);
 });

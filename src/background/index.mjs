@@ -2,17 +2,14 @@ import { AccountStorage } from "./account-storage.mjs";
 import {
   discoverJmapAutoconfig,
   loadHardcodedServerConfigs,
-  probeTcpAutoconfig,
 } from "./autoconfig.mjs";
 import { JmapSieveProvider } from "./jmap-provider.mjs";
 import { OAuthWindowFlow, refreshAccessToken } from "./oauth-client.mjs";
 import { ProviderError } from "./provider-error.mjs";
-import { TcpManageSieveProvider } from "./tcp-provider.mjs";
 
 const storage = new AccountStorage(messenger.storage.local);
 const providers = {
   jmap: new JmapSieveProvider(),
-  tcp: new TcpManageSieveProvider(),
 };
 const SAVE_REQUEST_TIMEOUT_MS = 30000;
 let hardcodedServerConfigsPromise = null;
@@ -74,8 +71,6 @@ async function handleMessage(message) {
         return await authorizeOAuth(message.config);
       case "managesieve.discoverJmapOAuthConfig":
         return await discoverJmapOAuthConfig(message.serverAddress, message.accountId);
-      case "managesieve.probeTcpAutoconfig":
-        return await probeTcpAutoconfigMessage(message.config);
       case "managesieve.testConnection":
         return await testConnection(message.accountId, message.config);
       case "managesieve.listScripts":
@@ -224,16 +219,6 @@ async function discoverJmapOAuthConfig(serverAddress, accountId = null) {
 function getHardcodedServerConfigs() {
   hardcodedServerConfigsPromise ??= loadHardcodedServerConfigs();
   return hardcodedServerConfigsPromise;
-}
-
-async function probeTcpAutoconfigMessage(config) {
-  return {
-    ok: true,
-    result: await probeTcpAutoconfig({
-      provider: providers.tcp,
-      config,
-    }),
-  };
 }
 
 async function testConnection(accountId, config) {

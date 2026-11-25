@@ -35,6 +35,10 @@ test("sidebar model lists account scripts followed by new and configure items", 
         { id: "script1", name: "before", isActive: false },
         { id: "script2", name: "active", isActive: true },
       ],
+    },
+    {
+      account1: { provider: "jmap" },
+      account2: { provider: "jmap" },
     }
   );
 
@@ -46,6 +50,20 @@ test("sidebar model lists account scripts followed by new and configure items", 
     "newScript",
     "configure",
   ]);
+  assert.deepEqual(model[1].items.map(item => item.type), ["new", "configure"]);
+});
+
+test("sidebar model omits the new script item for accounts without a connection", () => {
+  const model = buildSidebarModel(
+    [
+      { id: "account1", name: "First Account", type: "imap" },
+      { id: "account2", name: "Second Account", type: "pop3" },
+    ],
+    {},
+    { account2: { provider: "jmap" } }
+  );
+
+  assert.deepEqual(model[0].items.map(item => item.type), ["configure"]);
   assert.deepEqual(model[1].items.map(item => item.type), ["new", "configure"]);
 });
 

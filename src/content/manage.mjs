@@ -23,6 +23,7 @@ import {
   getTcpSecurityOptions,
   hasActiveScriptAfterRefresh,
   isScriptActiveAfterRefresh,
+  requiresScriptValidation,
   shouldRetryJmapAutodetection,
   visibleAccounts,
 } from "./app-state.mjs";
@@ -725,7 +726,7 @@ function renderEditorView(accountId, script) {
   let createButton = null;
   let nameInput = null;
   const existingScripts = state.scriptsByAccount[accountId] || [];
-  const validationRequired = state.configs[accountId]?.provider != "tcp";
+  const validationRequired = requiresScriptValidation(state.configs[accountId]);
   const updateCreateButton = () => {
     if (createButton) {
       createButton.disabled = state.editor.isSaving || !canCreateScript(
@@ -1201,7 +1202,7 @@ function syncEditorFeedback() {
 
   const saveButton = contentArea.querySelector('button[data-action-id="saveScript"]');
   if (saveButton) {
-    const validationRequired = state.configs[state.selected?.accountId]?.provider != "tcp";
+    const validationRequired = requiresScriptValidation(state.configs[state.selected?.accountId]);
     saveButton.disabled = state.editor.isSaving ||
       !canSaveScript(isDirty(), state.editor.error, { validationRequired });
   }
@@ -1209,7 +1210,7 @@ function syncEditorFeedback() {
   const createButton = contentArea.querySelector('button[data-action-id="createScript"]');
   if (createButton) {
     const accountId = state.selected?.accountId;
-    const validationRequired = state.configs[accountId]?.provider != "tcp";
+    const validationRequired = requiresScriptValidation(state.configs[accountId]);
     createButton.disabled = state.editor.isSaving || !canCreateScript(
       document.getElementById("scriptName")?.value || "",
       state.editor.content,

@@ -9,19 +9,17 @@ import {
   getInitialSelection,
   getDefaultServerAddress,
   getDiscoveryOrigin,
-  getTcpPermissionOrigin,
   getButtonLabelIds,
   getDeleteDialogModel,
   getEditorActionIds,
   getSetupMode,
   getSimpleSetupModel,
-  getServerTypeOptions,
-  getTcpSecurityOptions,
   getLoadedEditorState,
   getVisibleAuthFieldIds,
-  getVisibleConfigFieldIds,
   hasActiveScriptAfterRefresh,
   isScriptActiveAfterRefresh,
+  isSupportedProvider,
+  requiresScriptValidation,
   shouldRetryJmapAutodetection,
   visibleAccounts,
 } from "../src/content/app-state.mjs";
@@ -127,12 +125,12 @@ test("visible auth fields match the selected authentication mechanism", () => {
   ]);
 });
 
-test("setup mode defaults to simple and can switch to advanced or TCP credentials", () => {
+test("setup mode defaults to simple and can switch to advanced", () => {
   assert.equal(getSetupMode("account1", {}), "simple");
   assert.equal(getSetupMode("account1", {}, "advanced"), "advanced");
   assert.equal(getSetupMode("account1", { account1: "advanced" }), "advanced");
   assert.equal(getSetupMode("account1", { account1: "simple" }, "advanced"), "simple");
-  assert.equal(getSetupMode("addManualServer", { addManualServer: "tcpCredentials" }), "tcpCredentials");
+  assert.equal(getSetupMode("addManualServer", { addManualServer: "tcpCredentials" }), "simple");
   assert.equal(getSetupMode("account1", { account1: "unexpected" }), "simple");
   assert.equal(getSetupMode("account1", {}, "unexpected"), "simple");
 });
@@ -193,7 +191,7 @@ test("JMAP error forms retry autodetection when the server address changes", () 
       sessionUrl: "bad.example.net",
     },
     currentConfig: {
-      provider: "tcp",
+      provider: "native",
       sessionUrl: "good.example.net",
     },
   }), false);
@@ -220,33 +218,19 @@ test("default form submit invokes the configured primary action", () => {
   assert.equal(submitted, true);
 });
 
-test("server type options include explicit TCP ManageSieve", () => {
-  assert.deepEqual(getServerTypeOptions(), [
-    { value: "jmap", l10nId: "serverTypeJmap", checked: true },
-    { value: "tcp", l10nId: "serverTypeTcp", checked: false },
-  ]);
-  assert.deepEqual(getTcpSecurityOptions(), [
-    ["tls", "tcpSecurityTls"],
-    ["starttls", "tcpSecurityStartTls"],
-  ]);
+test("JMAP is the only supported provider, and an absent provider means JMAP", () => {
+  assert.equal(isSupportedProvider("jmap"), true);
+  assert.equal(isSupportedProvider(undefined), true);
+  assert.equal(isSupportedProvider(""), true);
+  assert.equal(isSupportedProvider("native"), false);
+  assert.equal(isSupportedProvider("tcp"), false);
 });
 
-test("visible config fields switch between JMAP and TCP providers", () => {
-  assert.equal(getVisibleConfigFieldIds("jmap", "oauth").has("oauthAuthorizationUrl"), true);
-  assert.equal(getVisibleConfigFieldIds("jmap", "bearer").has("token"), true);
-  assert.equal(getVisibleConfigFieldIds("tcp", "basic").has("tcpPort"), true);
-  assert.equal(getVisibleConfigFieldIds("tcp", "basic").has("tcpSecurity"), true);
-  assert.equal(getVisibleConfigFieldIds("tcp", "basic").has("username"), true);
-  assert.equal(getVisibleConfigFieldIds("tcp", "basic").has("password"), true);
-  assert.equal(getVisibleConfigFieldIds("tcp", "basic").has("token"), false);
-  assert.equal(getVisibleConfigFieldIds("tcp", "basic").has("oauthAuthorizationUrl"), false);
-});
-
-test("TCP permission origin uses an https host marker", () => {
-  assert.equal(getTcpPermissionOrigin("sieve.example.net"), "https://sieve.example.net/*");
-  assert.equal(getTcpPermissionOrigin("sieve.example.net:4190"), "https://sieve.example.net/*");
-  assert.equal(getTcpPermissionOrigin("https://sieve.example.net/.well-known/jmap"), "https://sieve.example.net/*");
-  assert.equal(getTcpPermissionOrigin(""), null);
+test("JMAP supports inline validation, unknown providers do not", () => {
+  assert.equal(requiresScriptValidation({ provider: "jmap" }), true);
+  assert.equal(requiresScriptValidation({}), true);
+  assert.equal(requiresScriptValidation(null), true);
+  assert.equal(requiresScriptValidation({ provider: "native" }), false);
 });
 
 test("visible accounts include mail and manual servers only", () => {
@@ -312,7 +296,7 @@ test("new scripts require both a name and content before create is enabled", () 
   assert.equal(canCreateScript("name.siv", "keep;", [], { code: "invalidSieve" }), false);
 });
 
-test("new TCP scripts can be created despite stale validation errors", () => {
+test("new scripts can be created despite stale validation errors when the provider cannot validate", () => {
   assert.equal(
     canCreateScript("name.siv", "keep;", [], { code: "invalidSieve" }, { validationRequired: false }),
     true
@@ -336,7 +320,7 @@ test("existing scripts can only be saved when dirty and valid", () => {
   assert.equal(canSaveScript(true, { code: "invalidSieve" }), false);
 });
 
-test("existing TCP scripts can be saved despite stale validation errors", () => {
+test("existing scripts can be saved despite stale validation errors when the provider cannot validate", () => {
   assert.equal(canSaveScript(true, { code: "invalidSieve" }, { validationRequired: false }), true);
 });
 

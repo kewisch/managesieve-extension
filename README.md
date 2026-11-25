@@ -1,9 +1,9 @@
 # Manage Sieve Filters
 
 Manage Sieve Filters is a Thunderbird extension for managing server-side mail
-filters written as Sieve scripts. It can connect to Sieve-capable servers using
-JMAP Sieve over HTTPS or TCP ManageSieve, then list, edit, validate, save,
-create, delete, activate, and deactivate scripts from Thunderbird.
+filters written as Sieve scripts. It connects to Sieve-capable servers using
+JMAP Sieve over HTTPS, then lists, edits, validates, saves, creates, deletes,
+activates, and deactivates scripts from Thunderbird.
 
 <img title="Sieve Configuration" width="80%" src="assets/screenshot.png">
 

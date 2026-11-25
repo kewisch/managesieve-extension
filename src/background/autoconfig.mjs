@@ -8,8 +8,6 @@ import {
 import { ProviderError } from "./provider-error.mjs";
 import { normalizeJmapSessionUrl } from "./server-address.mjs";
 
-const TCP_AUTOCONFIG_PORT = 4190;
-const TCP_SECURITY_PROBE_ORDER = ["tls", "starttls"];
 const HARDCODED_SERVER_CONFIGS_URL = new URL("./server-configs.json", import.meta.url);
 const URL_SCHEME_PATTERN = /^[a-z][a-z\d+.-]*:/i;
 const UNSAFE_HARDCODED_CONFIG_FIELDS = new Set([
@@ -208,46 +206,6 @@ function sanitizeHardcodedConfig(config) {
   return Object.fromEntries(
     Object.entries(config).filter(([key]) => !UNSAFE_HARDCODED_CONFIG_FIELDS.has(key))
   );
-}
-
-export async function probeTcpAutoconfig({
-  provider,
-  config,
-}) {
-  const failures = [];
-
-  for (const tcpSecurity of TCP_SECURITY_PROBE_ORDER) {
-    const attemptConfig = {
-      ...config,
-      provider: "tcp",
-      authType: "basic",
-      tcpPort: Number(config.tcpPort || TCP_AUTOCONFIG_PORT),
-      tcpSecurity,
-    };
-    let connection = null;
-    try {
-      connection = await provider.discover(attemptConfig);
-      const scripts = await provider.listScripts(connection);
-      return {
-        config: attemptConfig,
-        scripts: scripts.scripts || [],
-      };
-    } catch (error) {
-      failures.push({
-        tcpSecurity,
-        code: error.code || "unexpectedError",
-        message: error.message || String(error),
-      });
-    } finally {
-      if (connection) {
-        await provider.closeConnection?.(connection);
-      }
-    }
-  }
-
-  throw new ProviderError("tcpAutoconfigFailed", "TCP ManageSieve autodetection failed.", {
-    failures,
-  });
 }
 
 function unavailableJmapResult(sessionUrl, error = null) {

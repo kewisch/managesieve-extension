@@ -13,16 +13,15 @@ import {
   getEditorActionIds,
   getLoadedEditorState,
   getServerIconPath,
-  getServerTypeOptions,
   getSetupMode,
   getSimpleSetupModel,
   getSidebarItemIcon,
   getInitialSelection,
   getDefaultServerAddress,
   getSelectedView,
-  getTcpSecurityOptions,
   hasActiveScriptAfterRefresh,
   isScriptActiveAfterRefresh,
+  isSupportedProvider,
   requiresScriptValidation,
   shouldRetryJmapAutodetection,
   visibleAccounts,
@@ -241,10 +240,6 @@ function renderConfigureView(accountId) {
     renderAdvancedConfigureView(accountId);
     return;
   }
-  if (mode == "tcpCredentials") {
-    renderTcpCredentialsView(accountId);
-    return;
-  }
 
   renderSimpleSetupView(accountId);
 }
@@ -255,23 +250,20 @@ function renderAdvancedConfigureView(accountId) {
   const rows = [];
   rows.push(["displayNameLabel", input("displayName", config.displayName || account?.name || "")]);
   rows.push(
-    ["serverTypeLabel", radioGroup("provider", getServerTypeOptions(), config.provider || "jmap")],
     ["serverAddressLabel", input("sessionUrl", config.sessionUrl || getDefaultServerAddress(account), message("serverAddressPlaceholder"))],
-    ["tcpPortLabel", input("tcpPort", config.tcpPort || "4190", message("tcpPortPlaceholder"), "number"), ["tcp"]],
-    ["tcpSecurityLabel", select("tcpSecurity", config.tcpSecurity || "tls", getTcpSecurityOptions()), ["tcp"]],
     ["authTypeLabel", select("authType", config.authType || "bearer", [
       ["bearer", "authBearer"],
       ["basic", "authBasic"],
       ["oauth", "authOAuth"],
-    ]), ["jmap"]],
-    ["tokenLabel", input("token", config.token || "", "", "password"), ["jmap", "bearer"]],
-    ["usernameLabel", input("username", config.username || ""), ["jmap", "basic", "tcp"]],
-    ["passwordLabel", input("password", config.password || "", "", "password"), ["jmap", "basic", "tcp"]],
-    ["oauthIssuerUrlLabel", input("oauthIssuerUrl", config.oauthIssuerUrl || "", message("oauthIssuerUrlPlaceholder")), ["jmap", "oauth"]],
-    ["oauthAuthorizationUrlLabel", input("oauthAuthorizationUrl", config.oauthAuthorizationUrl || "", message("oauthAuthorizationUrlPlaceholder")), ["jmap", "oauth"]],
-    ["oauthTokenUrlLabel", input("oauthTokenUrl", config.oauthTokenUrl || "", message("oauthTokenUrlPlaceholder")), ["jmap", "oauth"]],
-    ["oauthClientIdLabel", input("oauthClientId", config.oauthClientId || "open"), ["jmap", "oauth"]],
-    ["oauthScopeLabel", input("oauthScope", config.oauthScope || DEFAULT_OAUTH_SCOPE), ["jmap", "oauth"]],
+    ])],
+    ["tokenLabel", input("token", config.token || "", "", "password"), ["bearer"]],
+    ["usernameLabel", input("username", config.username || ""), ["basic"]],
+    ["passwordLabel", input("password", config.password || "", "", "password"), ["basic"]],
+    ["oauthIssuerUrlLabel", input("oauthIssuerUrl", config.oauthIssuerUrl || "", message("oauthIssuerUrlPlaceholder")), ["oauth"]],
+    ["oauthAuthorizationUrlLabel", input("oauthAuthorizationUrl", config.oauthAuthorizationUrl || "", message("oauthAuthorizationUrlPlaceholder")), ["oauth"]],
+    ["oauthTokenUrlLabel", input("oauthTokenUrl", config.oauthTokenUrl || "", message("oauthTokenUrlPlaceholder")), ["oauth"]],
+    ["oauthClientIdLabel", input("oauthClientId", config.oauthClientId || "open"), ["oauth"]],
+    ["oauthScopeLabel", input("oauthScope", config.oauthScope || DEFAULT_OAUTH_SCOPE), ["oauth"]],
     ["", buttonRow(getConfigureActionIds(account).map(actionId => button(
       actionId,
       actionId == "testConnection" ? "primary" : actionId == "removeManualServer" ? "danger" : "",
@@ -292,10 +284,6 @@ function renderAddManualServerView() {
     renderAdvancedAddManualServerView();
     return;
   }
-  if (mode == "tcpCredentials") {
-    renderTcpCredentialsView(null);
-    return;
-  }
 
   renderSimpleSetupView(null);
 }
@@ -306,23 +294,20 @@ function renderAdvancedAddManualServerView() {
     header(message("addServerTitle"), []),
     formRowset([
       ["displayNameLabel", input("displayName", config.displayName || "", message("displayNamePlaceholder"))],
-      ["serverTypeLabel", radioGroup("provider", getServerTypeOptions(), config.provider || "jmap")],
       ["serverAddressLabel", input("sessionUrl", config.sessionUrl || "", message("serverAddressPlaceholder"))],
-      ["tcpPortLabel", input("tcpPort", config.tcpPort || "4190", message("tcpPortPlaceholder"), "number"), ["tcp"]],
-      ["tcpSecurityLabel", select("tcpSecurity", config.tcpSecurity || "tls", getTcpSecurityOptions()), ["tcp"]],
       ["authTypeLabel", select("authType", config.authType || "bearer", [
         ["bearer", "authBearer"],
         ["basic", "authBasic"],
         ["oauth", "authOAuth"],
-      ]), ["jmap"]],
-      ["tokenLabel", input("token", config.token || "", "", "password"), ["jmap", "bearer"]],
-      ["usernameLabel", input("username", config.username || ""), ["jmap", "basic", "tcp"]],
-      ["passwordLabel", input("password", config.password || "", "", "password"), ["jmap", "basic", "tcp"]],
-      ["oauthIssuerUrlLabel", input("oauthIssuerUrl", config.oauthIssuerUrl || "", message("oauthIssuerUrlPlaceholder")), ["jmap", "oauth"]],
-      ["oauthAuthorizationUrlLabel", input("oauthAuthorizationUrl", config.oauthAuthorizationUrl || "", message("oauthAuthorizationUrlPlaceholder")), ["jmap", "oauth"]],
-      ["oauthTokenUrlLabel", input("oauthTokenUrl", config.oauthTokenUrl || "", message("oauthTokenUrlPlaceholder")), ["jmap", "oauth"]],
-      ["oauthClientIdLabel", input("oauthClientId", config.oauthClientId || "open"), ["jmap", "oauth"]],
-      ["oauthScopeLabel", input("oauthScope", config.oauthScope || DEFAULT_OAUTH_SCOPE), ["jmap", "oauth"]],
+      ])],
+      ["tokenLabel", input("token", config.token || "", "", "password"), ["bearer"]],
+      ["usernameLabel", input("username", config.username || ""), ["basic"]],
+      ["passwordLabel", input("password", config.password || "", "", "password"), ["basic"]],
+      ["oauthIssuerUrlLabel", input("oauthIssuerUrl", config.oauthIssuerUrl || "", message("oauthIssuerUrlPlaceholder")), ["oauth"]],
+      ["oauthAuthorizationUrlLabel", input("oauthAuthorizationUrl", config.oauthAuthorizationUrl || "", message("oauthAuthorizationUrlPlaceholder")), ["oauth"]],
+      ["oauthTokenUrlLabel", input("oauthTokenUrl", config.oauthTokenUrl || "", message("oauthTokenUrlPlaceholder")), ["oauth"]],
+      ["oauthClientIdLabel", input("oauthClientId", config.oauthClientId || "open"), ["oauth"]],
+      ["oauthScopeLabel", input("oauthScope", config.oauthScope || DEFAULT_OAUTH_SCOPE), ["oauth"]],
       ["", buttonRow(getAddManualServerActionIds().map(actionId => {
         if (actionId == "saveManualServer") {
           return button(actionId, "primary", () => saveManualConnection());
@@ -363,31 +348,6 @@ function renderSimpleSetupView(accountId) {
   showSetupError(accountId);
 }
 
-function renderTcpCredentialsView(accountId) {
-  const account = accountId ? getAccount(accountId) : null;
-  const config = getDraftConfig(accountId, state.configs[accountId] || {});
-  const continueButton = button("continueSetup", "primary", null, { type: "submit" });
-  const advancedButton = button("advancedSettings", "", () => openAdvancedSettings(accountId));
-  continueButton.disabled = state.isDetecting;
-  advancedButton.disabled = state.isDetecting;
-
-  contentArea.replaceChildren(
-    header(accountId ? message("configureTitle", [account?.name || accountId]) : message("addServerTitle"), []),
-    formRowset([
-      ["displayNameLabel", input("displayName", config.displayName || account?.name || "", message("displayNamePlaceholder"))],
-      ["serverAddressLabel", input("sessionUrl", config.sessionUrl || getDefaultServerAddress(account), message("serverAddressPlaceholder"))],
-      ["usernameLabel", input("username", config.username || "")],
-      ["passwordLabel", input("password", config.password || "", "", "password")],
-      ["", buttonRow([continueButton, advancedButton])],
-    ], () => continueTcpAutodetection(accountId)),
-    paragraph("hint", message("tcpCredentialsHint"))
-  );
-  if (state.isDetecting) {
-    showStatus(message("autodetectingServer"));
-  }
-  showSetupError(accountId);
-}
-
 async function startAutodetection(accountId) {
   const simpleConfig = readSimpleSetupForm(accountId);
   const key = setupKey(accountId);
@@ -419,24 +379,16 @@ async function startAutodetection(accountId) {
       return;
     }
 
-    if (discovery.result.config?.provider == "tcp") {
-      state.setupDrafts[key] = {
-        ...simpleConfig,
-        ...discovery.result.config,
-      };
-      state.setupModes[key] = "tcpCredentials";
+    if (!isSupportedProvider(discovery.result.config?.provider)) {
+      openAdvancedSettings(accountId, simpleConfig, { message: message("unsupportedProvider") });
       return;
     }
 
     if (!discovery.result.available) {
-      state.setupDrafts[key] = {
+      openAdvancedSettings(accountId, {
         ...simpleConfig,
-        provider: "tcp",
-        authType: "basic",
-        tcpPort: 4190,
-        tcpSecurity: "tls",
-      };
-      state.setupModes[key] = "tcpCredentials";
+        ...discovery.result.config,
+      }, { message: message("jmapUnavailable") });
       return;
     }
 
@@ -450,57 +402,6 @@ async function startAutodetection(accountId) {
     successMessage = message("connectionSuccessful");
   } catch (error) {
     openAdvancedSettings(accountId, getDraftConfig(accountId, simpleConfig), error);
-  } finally {
-    state.isDetecting = false;
-    render();
-    if (successMessage) {
-      showStatus(successMessage);
-    }
-  }
-}
-
-async function continueTcpAutodetection(accountId) {
-  const key = setupKey(accountId);
-  let successMessage = "";
-  const config = {
-    ...getDraftConfig(accountId),
-    displayName: document.getElementById("displayName")?.value.trim() || "",
-    sessionUrl: document.getElementById("sessionUrl")?.value.trim() || "",
-    username: document.getElementById("username")?.value || "",
-    password: document.getElementById("password")?.value || "",
-    provider: "tcp",
-    authType: "basic",
-    tcpPort: Number(getDraftConfig(accountId).tcpPort || 4190),
-    tcpSecurity: getDraftConfig(accountId).tcpSecurity || "tls",
-  };
-  state.setupDrafts[key] = config;
-  state.setupErrors[key] = null;
-
-  if (!config.username || !config.password) {
-    state.setupErrors[key] = { message: message("tcpCredentialsRequired") };
-    render();
-    return;
-  }
-
-  state.isDetecting = true;
-  render();
-  try {
-    const response = await sendMessage({
-      type: "managesieve.probeTcpAutoconfig",
-      config,
-    });
-    if (!response.ok) {
-      openAdvancedSettings(accountId, config, response.error);
-      return;
-    }
-
-    await saveDetectedConfig(accountId, {
-      ...config,
-      ...response.result.config,
-    });
-    successMessage = message("connectionSuccessful");
-  } catch (error) {
-    openAdvancedSettings(accountId, getDraftConfig(accountId, config), error);
   } finally {
     state.isDetecting = false;
     render();
@@ -1243,12 +1144,11 @@ function renderError(error) {
 }
 
 function readConfigForm() {
-  const provider = document.querySelector('input[name="provider"]:checked')?.value || "jmap";
   return {
-    provider,
+    provider: "jmap",
     displayName: document.getElementById("displayName")?.value.trim() || "",
     sessionUrl: document.getElementById("sessionUrl")?.value.trim() || "",
-    authType: provider == "tcp" ? "basic" : document.getElementById("authType")?.value || "bearer",
+    authType: document.getElementById("authType")?.value || "bearer",
     token: document.getElementById("token")?.value || "",
     username: document.getElementById("username")?.value || "",
     password: document.getElementById("password")?.value || "",
@@ -1257,8 +1157,6 @@ function readConfigForm() {
     oauthClientId: normalizeClientId(document.getElementById("oauthClientId")?.value),
     oauthTokenUrl: document.getElementById("oauthTokenUrl")?.value.trim() || "",
     oauthScope: document.getElementById("oauthScope")?.value.trim() || DEFAULT_OAUTH_SCOPE,
-    tcpPort: Number(document.getElementById("tcpPort")?.value || 4190),
-    tcpSecurity: document.getElementById("tcpSecurity")?.value || "tls",
   };
 }
 
@@ -1328,10 +1226,7 @@ function formRowset(rows, defaultSubmitHandler = null) {
 function getFieldDescriptionId(fieldId) {
   return {
     displayName: "displayNameDescription",
-    provider: "serverTypeDescription",
     sessionUrl: "serverAddressDescription",
-    tcpPort: "tcpPortDescription",
-    tcpSecurity: "tcpSecurityDescription",
     authType: "authTypeDescription",
     token: "tokenDescription",
     username: "usernameDescription",
@@ -1345,15 +1240,7 @@ function getFieldDescriptionId(fieldId) {
 }
 
 function setFieldVisibilityMetadata(element, tokens) {
-  if (!tokens) {
-    return;
-  }
-
-  const providers = tokens.filter(token => token == "jmap" || token == "tcp");
-  const authTypes = tokens.filter(token => token == "bearer" || token == "basic" || token == "oauth");
-  if (providers.length) {
-    element.dataset.visibleProviders = providers.join(" ");
-  }
+  const authTypes = tokens?.filter(token => token == "bearer" || token == "basic" || token == "oauth") || [];
   if (authTypes.length) {
     element.dataset.visibleAuthTypes = authTypes.join(" ");
   }
@@ -1361,29 +1248,19 @@ function setFieldVisibilityMetadata(element, tokens) {
 
 function bindAuthFieldVisibility() {
   const authType = document.getElementById("authType");
-  const providerControls = [...contentArea.querySelectorAll('input[name="provider"]')];
-  if (!authType && !providerControls.length) {
+  if (!authType) {
     return;
   }
 
-  const update = () => updateAuthFieldVisibility(
-    document.querySelector('input[name="provider"]:checked')?.value || "jmap",
-    authType?.value || "bearer"
-  );
-  authType?.addEventListener("change", update);
-  for (const control of providerControls) {
-    control.addEventListener("change", update);
-  }
+  const update = () => updateAuthFieldVisibility(authType.value || "bearer");
+  authType.addEventListener("change", update);
   update();
 }
 
-function updateAuthFieldVisibility(provider, authType) {
-  for (const element of contentArea.querySelectorAll("[data-visible-providers], [data-visible-auth-types]")) {
-    const providers = element.dataset.visibleProviders?.split(" ").filter(Boolean) || [];
-    const authTypes = element.dataset.visibleAuthTypes?.split(" ").filter(Boolean) || [];
-    const providerVisible = !providers.length || providers.includes(provider);
-    const authVisible = provider != "jmap" || !authTypes.length || authTypes.includes(authType);
-    element.hidden = !providerVisible || !authVisible;
+function updateAuthFieldVisibility(authType) {
+  for (const element of contentArea.querySelectorAll("[data-visible-auth-types]")) {
+    const authTypes = element.dataset.visibleAuthTypes.split(" ").filter(Boolean);
+    element.hidden = authTypes.length > 0 && !authTypes.includes(authType);
   }
 }
 
@@ -1409,25 +1286,6 @@ function select(id, value, options) {
   }
 
   return field;
-}
-
-function radioGroup(name, options, value) {
-  const group = document.createElement("div");
-  group.id = name;
-  group.className = "radio-row";
-
-  for (const option of options) {
-    const label = document.createElement("label");
-    const control = document.createElement("input");
-    control.type = "radio";
-    control.name = name;
-    control.value = option.value;
-    control.checked = value ? option.value == value : option.checked;
-    label.append(control, document.createTextNode(message(option.l10nId)));
-    group.append(label);
-  }
-
-  return group;
 }
 
 function button(labelId, className, listener, { type = "button" } = {}) {

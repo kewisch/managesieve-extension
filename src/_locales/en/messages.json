@@ -45,19 +45,19 @@
     "message": "Detecting server settings..."
   },
   "addServerAutodetectHint": {
-    "message": "Enter the server name and address. Manage Sieve will try JMAP first, then ask for credentials if TCP ManageSieve is needed."
+    "message": "Enter the server name and address. Manage Sieve will look for a JMAP Sieve service there."
   },
   "configureAutodetectHint": {
-    "message": "Enter the server address. Manage Sieve will detect the safest available connection settings."
-  },
-  "tcpCredentialsHint": {
-    "message": "JMAP was not available. Enter the ManageSieve user name and password to try TCP autodetection."
+    "message": "Enter the server address. Manage Sieve will detect the JMAP Sieve settings for it."
   },
   "serverAddressRequired": {
     "message": "Enter a server address to continue."
   },
-  "tcpCredentialsRequired": {
-    "message": "Enter a user name and password to continue."
+  "jmapUnavailable": {
+    "message": "No JMAP Sieve service was found at this address. Check the server address, or enter the connection settings manually below."
+  },
+  "unsupportedProvider": {
+    "message": "This server needs a connection type that Manage Sieve does not support. Enter the JMAP connection settings manually below."
   },
   "addServerTitle": {
     "message": "Add Sieve Server"
@@ -94,18 +94,6 @@
       }
     }
   },
-  "serverTypeLabel": {
-    "message": "Server Type:"
-  },
-  "serverTypeDescription": {
-    "message": "JMAP uses HTTPS and OAuth. TCP ManageSieve connects directly to port 4190."
-  },
-  "serverTypeJmap": {
-    "message": "JMAP"
-  },
-  "serverTypeTcp": {
-    "message": "TCP ManageSieve"
-  },
   "serverAddressLabel": {
     "message": "Server Address:"
   },
@@ -114,27 +102,6 @@
   },
   "serverAddressPlaceholder": {
     "message": "mail.example.com"
-  },
-  "tcpPortLabel": {
-    "message": "Port:"
-  },
-  "tcpPortDescription": {
-    "message": "The TCP ManageSieve port. The standard default is 4190."
-  },
-  "tcpPortPlaceholder": {
-    "message": "4190"
-  },
-  "tcpSecurityLabel": {
-    "message": "Security:"
-  },
-  "tcpSecurityDescription": {
-    "message": "TLS connects securely immediately. STARTTLS upgrades to TLS after connecting."
-  },
-  "tcpSecurityStartTls": {
-    "message": "STARTTLS"
-  },
-  "tcpSecurityTls": {
-    "message": "TLS"
   },
   "authTypeLabel": {
     "message": "Authentication:"
@@ -161,7 +128,7 @@
     "message": "User name:"
   },
   "usernameDescription": {
-    "message": "The login name used for Basic authentication or TCP ManageSieve."
+    "message": "The login name used for Basic authentication."
   },
   "passwordLabel": {
     "message": "Password:"

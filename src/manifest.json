@@ -5,7 +5,7 @@
   "author": "Philipp Kewisch",
   "description": "__MSG_extensionDescription__",
   "default_locale": "en",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "browser_specific_settings": {
     "gecko": {
       "id": "managesieve@mozilla.kewis.ch",
